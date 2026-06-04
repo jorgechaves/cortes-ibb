@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+
+# Segredos e configs locais
+.env
+*.token.json
+credentials.json
+
+# Output do app
+output/
+
+# Mídia local (vídeos-fonte arrastados na pasta)
+*.mp4
+*.MP4
+*.mov
+*.MOV
+
+# OS
+.DS_Store
+Thumbs.db
