@@ -55,6 +55,9 @@ def _chunk_words_two(words: list[Word]) -> list[tuple[float, float, str]]:
     return adjusted
 
 
+DEFAULT_SIZE = 28
+
+
 def build_ass(
     cut_words: list[Word],
     cut_start: float,
@@ -63,10 +66,13 @@ def build_ass(
     width: int,
     height: int,
     font: str | None = None,
-    size: int = 14,
+    size: int | None = None,
 ) -> None:
     """Build an ASS file with subtitles relative to t=0 (cut_start subtracted)."""
     font = font or os.environ.get("CORTES_FONT", "Antique Olive Std")
+    if size is None:
+        env_size = os.environ.get("CORTES_FONT_SIZE")
+        size = int(env_size) if env_size else DEFAULT_SIZE
 
     # Rebase timestamps to start of cut
     rebased: list[Word] = []

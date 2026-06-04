@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 
-SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+SCOPES = ["https://www.googleapis.com/auth/drive"]
 CONFIG_DIR = Path(os.path.expanduser("~/.config/cortes-ibb"))
 CREDENTIALS_PATH = CONFIG_DIR / "credentials.json"
 TOKEN_PATH = CONFIG_DIR / "token.json"
@@ -71,6 +71,21 @@ def get_or_create_folder(service, name: str, parent_id: str) -> str:
     return folder["id"]
 
 
+EXT_TO_MIME = {
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".m4v": "video/x-m4v",
+    ".md": "text/markdown",
+    ".txt": "text/plain",
+    ".json": "application/json",
+}
+
+
+def _infer_mime(name: str) -> str:
+    ext = Path(name).suffix.lower()
+    return EXT_TO_MIME.get(ext, "application/octet-stream")
+
+
 def upload_file(
     service,
     folder_id: str,
@@ -79,12 +94,14 @@ def upload_file(
     on_event: Callable[[dict], None] | None,
     file_idx: int,
     file_total: int,
+    mime: str | None = None,
 ):
     from googleapiclient.http import MediaFileUpload
 
-    media = MediaFileUpload(local_path, mimetype="video/mp4", resumable=True, chunksize=4 * 1024 * 1024)
+    mime = mime or _infer_mime(name)
+    media = MediaFileUpload(local_path, mimetype=mime, resumable=True, chunksize=4 * 1024 * 1024)
     request = service.files().create(
-        body={"name": name, "parents": [folder_id], "mimeType": "video/mp4"},
+        body={"name": name, "parents": [folder_id], "mimeType": mime},
         media_body=media,
         fields="id,name,webViewLink",
     )
@@ -105,7 +122,7 @@ def upload_file(
 
 
 def upload_all(
-    cuts: list[tuple[str, str]],  # list of (local_path, name)
+    cuts: list,  # list of (local_path, name) or (local_path, name, mime)
     out_dir: str,
     on_event: Callable[[dict], None],
 ) -> list[dict]:
@@ -121,9 +138,15 @@ def upload_all(
     on_event({"type": "log", "stage": "drive", "message": f"Pasta destino: {TARGET_FOLDER}/{subfolder_name}"})
 
     results: list[dict] = []
-    for i, (path, name) in enumerate(cuts):
+    total = len(cuts)
+    for i, entry in enumerate(cuts):
+        if len(entry) == 3:
+            path, name, mime = entry
+        else:
+            path, name = entry
+            mime = None
         on_event({"type": "log", "stage": "drive", "message": f"Enviando {name}..."})
-        resp = upload_file(service, folder_id, path, name, on_event, i, len(cuts))
+        resp = upload_file(service, folder_id, path, name, on_event, i, total, mime=mime)
         results.append({
             "name": resp.get("name"),
             "id": resp.get("id"),

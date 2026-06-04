@@ -54,8 +54,10 @@ Acompanhe a barra de progresso até 100%. Ao terminar, a UI lista os 6 cortes co
 | `OPENAI_API_KEY` | — | Habilita seleção semântica (OpenAI). Sem ela, fallback heurístico. |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Modelo OpenAI para selecionar os 6 trechos. |
 | `DISABLE_SEMANTIC_SELECTION` | — | Se setada (`=1`), força fallback heurístico mesmo com `OPENAI_API_KEY`. |
+| `DISABLE_INSTAGRAM` | — | Se setada (`=1`), pula a geração das legendas de Instagram. |
 | `WHISPER_MODEL` | `small` | Modelo faster-whisper: `tiny`, `base`, `small`, `medium`, `large-v3`. |
 | `CORTES_FONT` | `Antique Olive Std` | Família da fonte da legenda. |
+| `CORTES_FONT_SIZE` | `28` | Override do tamanho da legenda em pt. |
 
 ## Como a seleção funciona
 
@@ -66,17 +68,44 @@ O backend gera entre 12 e 20 janelas-candidato de 50–75 s ancoradas em pausas 
 
 O modo usado fica registrado em `output/<job-id>/cuts.json` e aparece como banner na UI quando é o heurístico.
 
+## Legendas para Instagram
+
+Após render+concat, o pipeline chama `gpt-4o-mini` uma vez com os 6 cortes (`title` + `rationale` + transcrição) e recebe os 6 pacotes de post de feed:
+
+- **Hook** — 1 linha forte (≤ 80 chars), prende antes do "...mais".
+- **Caption** — 3–6 parágrafos curtos, voz reflexiva da IBB.
+- **CTA** — Salvar / Comentar / Compartilhar.
+- **Hashtags** — 10–15 PT-BR mistas (`#fe`, `#palavradedeus`, `#ibb`, ...).
+
+Saída:
+
+- `output/<job-id>/instagram.md` — agregado em Markdown para revisão humana.
+- `output/<job-id>/corte-XX-instagram.txt` — 1 arquivo por corte, formato copy-paste.
+- Subpasta `videos-ibb/[YYYY-MM-DD]` do Drive recebe ambos junto dos MP4.
+- UI mostra hook/caption/CTA/hashtags por corte com botão **Copiar** que coloca o texto formatado no clipboard.
+
+**Reveja antes de postar.** O modelo é instruído a não inventar versículos, mas é prudente conferir o texto e ajustar tom/citações se necessário.
+
+Para pular a geração: `DISABLE_INSTAGRAM=1`. Para gerar/reenviar em um job antigo:
+
+```bash
+python3 rebuild.py output/<job-id> --with-captions      # regenera MP4 + legendas + reupload
+python3 reupload.py output/<job-id> --with-captions     # mantém MP4, gera legendas se faltam, reupload
+```
+
 ## Saídas
 
 Para cada job (timestamp + slug), o app cria:
 
 ```
 output/<job-id>/
-├── source.mp4           # cópia do vídeo arrastado
-├── transcript.json      # transcrição com word-level timestamps
-├── cuts.json            # 6 cortes com title, rationale, slug, modo
-├── corte-01-<slug>.mp4  # ... corte-06-<slug>.mp4
-├── drive-ids.json       # IDs do Drive após upload
+├── source.mp4                       # cópia do vídeo arrastado
+├── transcript.json                  # transcrição com word-level timestamps
+├── cuts.json                        # 6 cortes + metadados + posts Instagram
+├── corte-01-<slug>.mp4              # ... corte-06-<slug>.mp4
+├── instagram.md                     # agregado de revisão
+├── corte-01-instagram.txt           # ... corte-06-instagram.txt
+├── drive-ids.json                   # IDs do Drive após upload
 └── report.md            # resumo legível
 ```
 

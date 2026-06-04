@@ -18,6 +18,7 @@ from . import outro as _outro
 from . import render as _render
 from . import concat as _concat
 from . import drive as _drive
+from . import instagram as _instagram
 
 
 # Stage weights (must sum to ~100). Used by app.py for global progress bar.
@@ -28,8 +29,9 @@ STAGE_WEIGHTS = {
     "select": 3,
     "ass": 5,
     "outro": 5,
-    "render": 40,
+    "render": 35,
     "concat": 5,
+    "instagram": 5,
     "drive": 10,
 }
 
@@ -166,15 +168,43 @@ def run(
             pass
     emit({"type": "progress", "stage": "concat", "fraction": 1.0})
 
+    # ---- Instagram captions ----
+    emit({"type": "stage", "stage": "instagram", "message": "Gerando legendas Instagram"})
+    ig_cuts_input = [
+        {
+            "idx": c.idx,
+            "title": c.title,
+            "rationale": c.rationale,
+            "text": " ".join(w.text for w in words if w.start >= c.start - 0.01 and w.end <= c.end + 0.5),
+        }
+        for c in cuts
+    ]
+    ig_posts = _instagram.generate(ig_cuts_input, emit)
+    instagram_skipped = ig_posts is None
+    instagram_skip_reason: str | None = None
+    if instagram_skipped:
+        if not os.environ.get("OPENAI_API_KEY"):
+            instagram_skip_reason = "missing_api_key"
+        elif os.environ.get("DISABLE_INSTAGRAM"):
+            instagram_skip_reason = "disabled_by_env"
+        else:
+            instagram_skip_reason = "api_or_validation_failure"
+    else:
+        _instagram.write_files(ig_posts, ig_cuts_input, out_dir)
+    emit({"type": "progress", "stage": "instagram", "fraction": 1.0})
+
     emit({"type": "stage", "stage": "drive", "message": "Enviando para Google Drive"})
+    upload_list: list[tuple[str, str]] = [(str(p), name) for p, name in final_paths]
+    if not instagram_skipped:
+        upload_list.append((str(out_dir_p / "instagram.md"), "instagram.md"))
+        for p in ig_posts:
+            fname = f"corte-{p.idx:02d}-instagram.txt"
+            upload_list.append((str(out_dir_p / fname), fname))
+
     drive_results: list[dict] = []
     drive_error: str | None = None
     try:
-        drive_results = _drive.upload_all(
-            [(str(p), name) for p, name in final_paths],
-            out_dir,
-            emit,
-        )
+        drive_results = _drive.upload_all(upload_list, out_dir, emit)
     except _drive.DriveSetupError as e:
         drive_error = str(e)
         emit({"type": "log", "stage": "drive", "message": f"Drive desativado: {e}"})
@@ -185,9 +215,11 @@ def run(
 
     # Build final result + report
     drive_by_name = {r["name"]: r for r in drive_results}
+    ig_by_idx = {p.idx: p for p in (ig_posts or [])}
     final = []
     for c, (p, name) in zip(cuts, final_paths):
         drive = drive_by_name.get(name)
+        ig = ig_by_idx.get(c.idx)
         final.append({
             "idx": c.idx,
             "title": c.title,
@@ -198,6 +230,7 @@ def run(
             "duration": round(c.end - c.start + 2.0, 2),  # +2s outro
             "drive_id": drive["id"] if drive else None,
             "drive_url": drive["url"] if drive else None,
+            "instagram": _instagram.post_to_dict(ig) if ig else None,
         })
 
     result = {
@@ -205,10 +238,14 @@ def run(
         "fallback_reason": fallback_reason,
         "model": model_used,
         "drive_error": drive_error,
+        "instagram_skipped": instagram_skipped,
+        "instagram_skip_reason": instagram_skip_reason,
         "out_dir": str(out_dir_p),
         "cuts": final,
     }
 
+    # Overwrite cuts.json with the full payload (selection + instagram).
+    (out_dir_p / "cuts.json").write_text(json.dumps(result, ensure_ascii=False, indent=2))
     _write_report(out_dir_p, result)
     emit({"type": "done", "stage": "done", "percent": 100.0, "data": result})
     return result
@@ -223,6 +260,8 @@ def _write_report(out_dir: Path, result: dict) -> None:
         lines.append(f"- Motivo do fallback: {result['fallback_reason']}")
     if result["drive_error"]:
         lines.append(f"- Erro no upload Drive: {result['drive_error']}")
+    if result.get("instagram_skipped"):
+        lines.append(f"- Legendas Instagram puladas: {result.get('instagram_skip_reason')}")
     lines.append("\n## Cortes\n")
     for c in result["cuts"]:
         lines.append(f"### {c['idx']}. {c['title']}")
@@ -231,6 +270,13 @@ def _write_report(out_dir: Path, result: dict) -> None:
         lines.append(f"- Arquivo: `{c['file']}` ({c['duration']}s)")
         if c.get("drive_url"):
             lines.append(f"- Drive: <{c['drive_url']}>")
+        ig = c.get("instagram")
+        if ig:
+            lines.append(f"- **Instagram**")
+            lines.append(f"  - HOOK: {ig['hook']}")
+            lines.append(f"  - CAPTION: {ig['caption']}")
+            lines.append(f"  - CTA: {ig['cta']}")
+            lines.append(f"  - HASHTAGS: `{' '.join(ig['hashtags'])}`")
         lines.append("")
     (out_dir / "report.md").write_text("\n".join(lines), encoding="utf-8")
 

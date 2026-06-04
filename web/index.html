@@ -136,6 +136,35 @@
     }
     .cut .meta a { color: var(--accent-2); text-decoration: none; }
     .cut .meta a:hover { text-decoration: underline; }
+    .ig {
+      margin-top: 10px;
+      background: #fafaf9;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .ig-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .ig-head strong { font-size: 13px; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
+    .ig-hook { font-weight: 600; font-size: 15px; margin: 6px 0; }
+    .ig-caption { font-size: 14px; white-space: pre-wrap; margin: 6px 0; }
+    .ig-cta { font-size: 14px; font-style: italic; color: var(--muted); margin: 6px 0; }
+    .ig-tags { font-size: 13px; color: var(--accent-2); word-break: break-word; }
+    .copy-btn {
+      font: inherit;
+      font-size: 12px;
+      background: var(--ink);
+      color: white;
+      border: 0;
+      border-radius: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+    }
+    .copy-btn.ok { background: var(--ok); }
     button {
       font: inherit;
       background: #1c1917;
@@ -329,6 +358,7 @@
         outro: 'Renderizando logo final',
         render: 'Renderizando cortes',
         concat: 'Finalizando MP4s',
+        instagram: 'Gerando legendas Instagram',
         drive: 'Enviando ao Drive',
         done: 'Concluído',
       };
@@ -348,6 +378,9 @@
       }
       if (data.drive_error) {
         setBanner('warn', `Upload ao Drive falhou: ${data.drive_error}. Arquivos locais preservados em ${data.out_dir}.`);
+      }
+      if (data.instagram_skipped) {
+        setBanner('warn', `Legendas Instagram não geradas — motivo: ${data.instagram_skip_reason || 'desconhecido'}.`);
       }
       resultsPanel.classList.add('show');
       cutsEl.innerHTML = '';
@@ -377,8 +410,63 @@
           meta.appendChild(a);
         }
         item.appendChild(meta);
+        if (c.instagram) item.appendChild(renderInstagram(c.instagram));
         cutsEl.appendChild(item);
       });
+    }
+
+    function renderInstagram(ig) {
+      const wrap = document.createElement('div');
+      wrap.className = 'ig';
+
+      const head = document.createElement('div');
+      head.className = 'ig-head';
+      const label = document.createElement('strong');
+      label.textContent = 'Instagram';
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.textContent = 'Copiar';
+      btn.addEventListener('click', () => {
+        const txt = formatIgText(ig);
+        navigator.clipboard.writeText(txt).then(() => {
+          btn.textContent = 'Copiado!';
+          btn.classList.add('ok');
+          setTimeout(() => {
+            btn.textContent = 'Copiar';
+            btn.classList.remove('ok');
+          }, 1500);
+        });
+      });
+      head.appendChild(label);
+      head.appendChild(btn);
+      wrap.appendChild(head);
+
+      const hook = document.createElement('div');
+      hook.className = 'ig-hook';
+      hook.textContent = ig.hook;
+      wrap.appendChild(hook);
+
+      const cap = document.createElement('div');
+      cap.className = 'ig-caption';
+      cap.textContent = ig.caption;
+      wrap.appendChild(cap);
+
+      const cta = document.createElement('div');
+      cta.className = 'ig-cta';
+      cta.textContent = ig.cta;
+      wrap.appendChild(cta);
+
+      const tags = document.createElement('div');
+      tags.className = 'ig-tags';
+      tags.textContent = (ig.hashtags || []).join(' ');
+      wrap.appendChild(tags);
+
+      return wrap;
+    }
+
+    function formatIgText(ig) {
+      const tags = (ig.hashtags || []).join(' ');
+      return `${ig.hook}\n\n${ig.caption}\n\n${ig.cta}\n\n${tags}\n`;
     }
 
     function textNode(t) { return document.createTextNode(t); }
