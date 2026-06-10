@@ -4,507 +4,711 @@
   <meta charset="utf-8" />
   <title>Cortes IBB</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
   <style>
     :root {
-      color-scheme: light;
-      --bg: #f5f5f4;
-      --panel: #ffffff;
-      --ink: #1c1917;
-      --muted: #78716c;
-      --line: #e7e5e4;
-      --accent: #1e40af;
-      --accent-2: #2563eb;
-      --ok: #15803d;
-      --warn: #b45309;
-      --warn-bg: #fef3c7;
-      --err: #b91c1c;
-      --err-bg: #fee2e2;
+      --bg: #0c0b09;
+      --surface: #161410;
+      --surface-hi: #1e1b14;
+      --surface-hover: #252218;
+      --border: #292420;
+      --border-hi: #3d3828;
+      --gold: #c4963a;
+      --gold-bright: #e0b258;
+      --gold-glow: rgba(196,150,58,.18);
+      --gold-dim: rgba(196,150,58,.08);
+      --text: #ede8de;
+      --text-2: #9e988e;
+      --text-3: #565046;
+      --ok: #52b87a;
+      --ok-bg: rgba(82,184,122,.12);
+      --warn: #cc8f28;
+      --warn-bg: rgba(204,143,40,.1);
+      --err: #d45858;
+      --err-bg: rgba(212,88,88,.1);
+      --r: 10px;
+      --r-lg: 16px;
     }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
     body {
-      font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      font-family: 'DM Sans', sans-serif;
       background: var(--bg);
-      color: var(--ink);
+      color: var(--text);
       min-height: 100vh;
     }
-    main {
-      max-width: 760px;
-      margin: 0 auto;
-      padding: 48px 24px 80px;
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 999;
+      opacity: .04;
+      background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='250' height='250'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='250' height='250' filter='url(%23n)'/></svg>");
+      background-size: 250px 250px;
     }
-    h1 {
-      margin: 0 0 4px;
-      font-size: 28px;
-      letter-spacing: -0.01em;
+    main { max-width: 740px; margin: 0 auto; padding: 0 20px 80px; }
+
+    /* HEADER */
+    .site-header {
+      padding: 40px 0 32px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 28px;
+      display: flex; align-items: center; gap: 14px;
     }
-    .sub { color: var(--muted); margin: 0 0 32px; }
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
+    .header-icon {
+      width: 42px; height: 42px;
+      background: var(--gold-dim);
+      border: 1px solid var(--border-hi);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
-    .dropzone {
-      border: 2px dashed #d6d3d1;
-      border-radius: 16px;
-      padding: 56px 24px;
-      text-align: center;
-      background: #fafaf9;
-      transition: border-color .15s, background .15s;
-      cursor: pointer;
-      user-select: none;
+    .header-icon svg { width: 20px; height: 20px; stroke: var(--gold); fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+    .header-text h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 24px; font-weight: 700;
+      letter-spacing: -.015em; color: var(--text); line-height: 1.2;
     }
-    .dropzone.hover {
-      border-color: var(--accent);
-      background: #eff6ff;
-    }
-    .dropzone.disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .dropzone strong { display: block; font-size: 18px; margin-bottom: 4px; }
-    .dropzone span { color: var(--muted); font-size: 14px; }
-    input[type="file"] { display: none; }
-    .progress-wrap {
-      display: none;
-    }
-    .progress-wrap.show { display: block; }
-    .bar {
-      background: #e7e5e4;
-      border-radius: 999px;
-      overflow: hidden;
-      height: 14px;
-      margin: 12px 0 8px;
-    }
-    .bar > div {
-      background: linear-gradient(90deg, var(--accent), var(--accent-2));
-      height: 100%;
-      width: 0%;
-      transition: width .25s ease;
-    }
-    .stage-label {
-      display: flex;
-      justify-content: space-between;
-      font-size: 14px;
-      color: var(--muted);
-    }
-    .log {
-      margin-top: 16px;
-      max-height: 220px;
-      overflow: auto;
-      background: #0c0a09;
-      color: #e7e5e4;
-      font: 12px/1.55 ui-monospace, "SF Mono", Menlo, monospace;
-      padding: 12px 14px;
-      border-radius: 8px;
-    }
-    .log .ts { color: #78716c; margin-right: 6px; }
-    .log .err { color: #fca5a5; }
-    .log .warn { color: #fde047; }
+    .header-text p { font-size: 13px; color: var(--text-3); margin-top: 2px; }
+
+    /* BANNERS */
+    #banners { margin-bottom: 0; }
     .banner {
-      padding: 10px 14px;
-      border-radius: 8px;
-      margin-bottom: 16px;
-      font-size: 14px;
+      display: flex; align-items: flex-start; gap: 9px;
+      padding: 10px 13px; border-radius: var(--r);
+      font-size: 13.5px; margin-bottom: 10px;
+      line-height: 1.5; border: 1px solid transparent;
     }
-    .banner.warn { background: var(--warn-bg); color: var(--warn); }
-    .banner.err  { background: var(--err-bg);  color: var(--err); }
-    .results { display: none; }
-    .results.show { display: block; }
+    .banner.warn { background: var(--warn-bg); color: var(--warn); border-color: rgba(204,143,40,.2); }
+    .banner.err  { background: var(--err-bg);  color: var(--err);  border-color: rgba(212,88,88,.2); }
+    .banner-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; margin-top: 8px; }
+
+    /* DROPZONE */
+    .dropzone {
+      position: relative;
+      border: 1.5px dashed var(--border-hi);
+      border-radius: var(--r-lg);
+      padding: 52px 28px 46px;
+      text-align: center;
+      background: var(--surface);
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 36px 36px;
+      background-position: center;
+      transition: border-color .2s, box-shadow .2s;
+      cursor: pointer; user-select: none; overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .dropzone::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 65% 55% at 50% 50%, var(--gold-glow), transparent);
+      opacity: 0; transition: opacity .25s; pointer-events: none;
+    }
+    .dropzone:hover:not(.disabled)::before, .dropzone.hover::before { opacity: 1; }
+    .dropzone:hover:not(.disabled), .dropzone.hover {
+      border-color: var(--gold); border-style: solid;
+      box-shadow: 0 0 0 1px var(--gold-dim), 0 10px 32px rgba(0,0,0,.4);
+    }
+    .dropzone.disabled { opacity: .38; cursor: not-allowed; }
+    .dz-icon {
+      width: 50px; height: 50px; border-radius: 13px;
+      background: var(--surface-hi); border: 1px solid var(--border-hi);
+      margin: 0 auto 16px;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color .2s, background .2s; position: relative;
+    }
+    .dropzone:hover:not(.disabled) .dz-icon, .dropzone.hover .dz-icon {
+      border-color: var(--gold); background: var(--gold-dim);
+    }
+    .dz-icon svg { width: 22px; height: 22px; stroke: var(--text-3); fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; transition: stroke .2s; }
+    .dropzone:hover:not(.disabled) .dz-icon svg, .dropzone.hover .dz-icon svg { stroke: var(--gold); }
+    .dropzone strong { display: block; font-size: 15.5px; font-weight: 500; color: var(--text); margin-bottom: 5px; position: relative; }
+    .dropzone span { font-size: 12.5px; color: var(--text-3); position: relative; letter-spacing: .01em; }
+    input[type="file"] { display: none; }
+
+    /* PROGRESS */
+    .progress-section { display: none; margin-bottom: 4px; }
+    .progress-section.show { display: block; }
+
+    .stepper {
+      display: flex; align-items: flex-start;
+      padding: 14px 16px 12px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); margin-bottom: 10px; gap: 0;
+    }
+    .step {
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      flex: 1; min-width: 48px;
+    }
+    .step-line {
+      flex: 1; height: 1px; background: var(--border-hi);
+      margin-top: 12px; transition: background .35s; flex-shrink: 1;
+    }
+    .step-line.done { background: rgba(196,150,58,.35); }
+    .step-dot {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 1.5px solid var(--border-hi); background: var(--surface-hi);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--text-3);
+      transition: all .3s; flex-shrink: 0;
+    }
+    .step.done .step-dot { background: var(--gold-dim); border-color: var(--gold); color: var(--gold); }
+    .step.active .step-dot {
+      background: var(--gold-dim); border-color: var(--gold-bright); color: var(--gold-bright);
+      animation: stepPulse 1.6s ease-in-out infinite;
+    }
+    @keyframes stepPulse {
+      0%,100% { box-shadow: 0 0 0 0 var(--gold-glow); }
+      50%      { box-shadow: 0 0 0 5px transparent; }
+    }
+    .step-label {
+      font-size: 9.5px; color: var(--text-3); font-weight: 500;
+      letter-spacing: .04em; text-transform: uppercase; text-align: center;
+      transition: color .3s;
+    }
+    .step.done .step-label, .step.active .step-label { color: var(--text-2); }
+
+    .progress-bar-wrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 14px 16px; margin-bottom: 10px;
+    }
+    .progress-labels {
+      display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 9px;
+    }
+    #stage-text { font-size: 13.5px; font-weight: 500; color: var(--text); }
+    #percent-text { font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--gold); }
+    .progress-track {
+      background: var(--border); border-radius: 999px; height: 5px; overflow: hidden;
+    }
+    #bar-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #7a5a22, var(--gold), var(--gold-bright));
+      border-radius: 999px; transition: width .3s ease; position: relative;
+    }
+    #bar-fill::after {
+      content: ''; position: absolute; top: 0; left: -80%;
+      width: 60%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+      animation: shimmer 2s ease-in-out infinite;
+    }
+    @keyframes shimmer { 0% { left: -60%; } 100% { left: 160%; } }
+
+    .log {
+      background: #080705; border: 1px solid var(--border); border-radius: var(--r);
+      padding: 11px 13px;
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.7;
+      color: #9e9890; max-height: 190px; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: var(--border-hi) transparent;
+    }
+    .log::-webkit-scrollbar { width: 3px; }
+    .log::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+    .log-line { display: flex; gap: 8px; animation: logIn .15s ease; }
+    @keyframes logIn { from { opacity: 0; transform: translateX(-3px); } to { opacity: 1; transform: none; } }
+    .log .ts { color: var(--text-3); flex-shrink: 0; user-select: none; }
+    .log .err  { color: #d07070; }
+    .log .warn { color: #b88a30; }
+
+    /* RESULTS */
+    .results-section { display: none; margin-top: 32px; }
+    .results-section.show { display: block; }
+    .results-header {
+      display: flex; align-items: baseline; gap: 10px;
+      margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
+    }
+    .results-header h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 21px; font-weight: 700; color: var(--text);
+    }
+    .count-badge {
+      font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--text-3); background: var(--surface-hi);
+      border: 1px solid var(--border); padding: 2px 8px; border-radius: 20px;
+    }
+
+    /* CUT CARD */
     .cut {
-      border-top: 1px solid var(--line);
-      padding: 14px 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 20px 22px; margin-bottom: 10px;
+      position: relative; overflow: hidden;
+      transition: border-color .2s, transform .2s, box-shadow .2s;
+      animation: cardIn .45s cubic-bezier(.16,1,.3,1) var(--delay,0s) both;
     }
-    .cut:first-child { border-top: 0; padding-top: 0; }
-    .cut .head {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-      margin-bottom: 2px;
+    .cut:hover {
+      border-color: var(--border-hi); transform: translateY(-1px);
+      box-shadow: 0 8px 28px rgba(0,0,0,.32);
     }
-    .cut .idx { color: var(--muted); font-variant-numeric: tabular-nums; }
-    .cut .title { font-weight: 600; font-size: 16px; }
-    .cut .rat { color: var(--muted); font-style: italic; font-size: 14px; }
-    .cut .meta {
-      display: flex;
-      gap: 12px;
-      margin-top: 6px;
-      font-size: 13px;
-      color: var(--muted);
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: none; }
     }
-    .cut .meta a { color: var(--accent-2); text-decoration: none; }
-    .cut .meta a:hover { text-decoration: underline; }
-    .ig {
-      margin-top: 10px;
-      background: #fafaf9;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 12px 14px;
+    .cut-number {
+      position: absolute; top: 6px; right: 16px;
+      font-family: 'Playfair Display', serif;
+      font-size: 78px; font-weight: 700; color: var(--surface-hi);
+      line-height: 1; user-select: none; pointer-events: none;
+      transition: color .2s;
     }
-    .ig-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
+    .cut:hover .cut-number { color: var(--border-hi); }
+    .cut-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px; padding-right: 64px; }
+    .cut-idx {
+      font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
+      color: var(--gold); background: var(--gold-dim);
+      border: 1px solid rgba(196,150,58,.22); padding: 2px 7px; border-radius: 4px;
+      flex-shrink: 0; margin-top: 3px;
     }
-    .ig-head strong { font-size: 13px; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
-    .ig-hook { font-weight: 600; font-size: 15px; margin: 6px 0; }
-    .ig-caption { font-size: 14px; white-space: pre-wrap; margin: 6px 0; }
-    .ig-cta { font-size: 14px; font-style: italic; color: var(--muted); margin: 6px 0; }
-    .ig-tags { font-size: 13px; color: var(--accent-2); word-break: break-word; }
+    .cut-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 17px; font-weight: 600; color: var(--text); line-height: 1.35;
+    }
+    .cut-rat { font-size: 12.5px; color: var(--text-2); font-style: italic; margin-bottom: 12px; line-height: 1.55; }
+    .cut-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .meta-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11.5px; color: var(--text-2);
+      background: var(--surface-hi); border: 1px solid var(--border);
+      padding: 3px 9px; border-radius: 20px;
+    }
+    .meta-chip svg { width: 10px; height: 10px; stroke: var(--text-3); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .drive-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11.5px; color: var(--gold);
+      background: var(--gold-dim); border: 1px solid rgba(196,150,58,.22);
+      padding: 3px 10px; border-radius: 20px; text-decoration: none;
+      transition: background .2s, border-color .2s;
+    }
+    .drive-btn:hover { background: rgba(196,150,58,.14); border-color: rgba(196,150,58,.42); }
+    .drive-btn svg { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* INSTAGRAM */
+    .ig-section { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+    .ig-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none; padding: 4px 0;
+    }
+    .ig-toggle-left { display: flex; align-items: center; gap: 7px; }
+    .ig-label {
+      font-size: 11px; font-weight: 500; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--text-3);
+    }
+    .ig-pip {
+      width: 18px; height: 18px; border-radius: 5px;
+      background: linear-gradient(135deg, #833ab4, #fd1d1d 50%, #fcb045);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .ig-pip svg { width: 11px; height: 11px; fill: white; }
+    .ig-toggle-right { display: flex; align-items: center; gap: 7px; }
+    .ig-chev { width: 15px; height: 15px; stroke: var(--text-3); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+    .ig-section.open .ig-chev { transform: rotate(180deg); }
+    .ig-body { display: none; padding-top: 12px; }
+    .ig-section.open .ig-body { display: block; }
+    .ig-hook { font-weight: 600; font-size: 14.5px; color: var(--text); margin-bottom: 8px; line-height: 1.4; }
+    .ig-caption { font-size: 13px; color: var(--text-2); white-space: pre-wrap; line-height: 1.7; margin-bottom: 8px; }
+    .ig-cta { font-size: 12.5px; font-style: italic; color: var(--text-3); margin-bottom: 8px; }
+    .ig-tags { font-size: 12px; color: #5a7ab8; word-break: break-word; line-height: 1.9; }
+
+    /* BUTTONS */
     .copy-btn {
-      font: inherit;
-      font-size: 12px;
-      background: var(--ink);
-      color: white;
-      border: 0;
-      border-radius: 6px;
-      padding: 4px 10px;
-      cursor: pointer;
+      font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500;
+      letter-spacing: .03em;
+      background: var(--surface-hi); color: var(--text-2);
+      border: 1px solid var(--border-hi); border-radius: 6px;
+      padding: 4px 10px; cursor: pointer;
+      transition: background .15s, color .15s;
     }
-    .copy-btn.ok { background: var(--ok); }
-    button {
-      font: inherit;
-      background: #1c1917;
-      color: white;
-      border: 0;
-      border-radius: 8px;
-      padding: 8px 14px;
-      cursor: pointer;
-    }
-    button.ghost {
-      background: transparent;
-      color: var(--muted);
-      padding: 6px 10px;
-    }
-    button.ghost:hover { color: var(--ink); }
+    .copy-btn:hover { background: var(--surface-hover); color: var(--text); }
+    .copy-btn.ok { background: var(--ok-bg); color: var(--ok); border-color: rgba(82,184,122,.3); }
+
     footer {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      margin-top: 24px;
+      display: flex; justify-content: flex-end; margin-top: 40px;
+      padding-top: 20px; border-top: 1px solid var(--border);
     }
+    .btn-ghost {
+      font-family: 'DM Sans', sans-serif; font-size: 13px;
+      background: transparent; color: var(--text-3);
+      border: 1px solid var(--border); border-radius: var(--r);
+      padding: 7px 14px; cursor: pointer; transition: color .15s, border-color .15s;
+    }
+    .btn-ghost:hover { color: var(--text-2); border-color: var(--border-hi); }
   </style>
 </head>
 <body>
-  <main>
-    <h1>Cortes IBB</h1>
-    <p class="sub">Arraste o vídeo. O app gera 6 cortes (~60s) com legendas, ícone, cartão final e envia ao Drive.</p>
+<main>
 
-    <div id="banners"></div>
+  <header class="site-header">
+    <div class="header-icon">
+      <svg viewBox="0 0 24 24">
+        <polygon points="23 7 16 12 23 17 23 7"/>
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+      </svg>
+    </div>
+    <div class="header-text">
+      <h1>Cortes IBB</h1>
+      <p>Gerador de cortes para redes sociais · 1–3 min · arco narrativo</p>
+    </div>
+  </header>
 
-    <div class="panel">
-      <div id="dropzone" class="dropzone">
-        <strong>Arraste o vídeo aqui</strong>
-        <span>ou clique para selecionar (.mp4, .mov, .m4v)</span>
-        <input id="filepicker" type="file" accept="video/*" />
-      </div>
+  <div id="banners"></div>
 
-      <div id="progress-wrap" class="progress-wrap">
-        <div class="bar"><div id="bar-fill"></div></div>
-        <div class="stage-label">
-          <span id="stage-text">Aguardando...</span>
-          <span id="percent-text">0%</span>
-        </div>
-        <div id="log" class="log"></div>
-      </div>
+  <div id="dropzone" class="dropzone">
+    <div class="dz-icon">
+      <svg viewBox="0 0 24 24">
+        <polyline points="16 16 12 12 8 16"/>
+        <line x1="12" y1="12" x2="12" y2="21"/>
+        <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/>
+      </svg>
+    </div>
+    <strong>Arraste o vídeo aqui</strong>
+    <span>ou clique para selecionar &nbsp;·&nbsp; .mp4 &nbsp;·&nbsp; .mov &nbsp;·&nbsp; .m4v</span>
+    <input id="filepicker" type="file" accept="video/*" />
+  </div>
+
+  <div id="progress-wrap" class="progress-section">
+    <div class="stepper">
+      <div class="step" data-i="0"><div class="step-dot">1</div><div class="step-label">Upload</div></div>
+      <span class="step-line"></span>
+      <div class="step" data-i="1"><div class="step-dot">2</div><div class="step-label">Transcrição</div></div>
+      <span class="step-line"></span>
+      <div class="step" data-i="2"><div class="step-dot">3</div><div class="step-label">Seleção</div></div>
+      <span class="step-line"></span>
+      <div class="step" data-i="3"><div class="step-dot">4</div><div class="step-label">Render</div></div>
+      <span class="step-line"></span>
+      <div class="step" data-i="4"><div class="step-dot">5</div><div class="step-label">Instagram</div></div>
+      <span class="step-line"></span>
+      <div class="step" data-i="5"><div class="step-dot">6</div><div class="step-label">Drive</div></div>
     </div>
 
-    <div id="results" class="panel results">
-      <h2 style="margin:0 0 12px;font-size:18px;">Cortes prontos</h2>
-      <div id="cuts"></div>
+    <div class="progress-bar-wrap">
+      <div class="progress-labels">
+        <span id="stage-text">Aguardando...</span>
+        <span id="percent-text">0%</span>
+      </div>
+      <div class="progress-track"><div id="bar-fill"></div></div>
     </div>
 
-    <footer>
-      <button class="ghost" id="shutdown">Encerrar app</button>
-    </footer>
-  </main>
+    <div id="log" class="log"></div>
+  </div>
 
-  <script>
-    const dropzone = document.getElementById('dropzone');
-    const picker = document.getElementById('filepicker');
-    const progressWrap = document.getElementById('progress-wrap');
-    const barFill = document.getElementById('bar-fill');
-    const stageText = document.getElementById('stage-text');
-    const percentText = document.getElementById('percent-text');
-    const logEl = document.getElementById('log');
-    const banners = document.getElementById('banners');
-    const resultsPanel = document.getElementById('results');
-    const cutsEl = document.getElementById('cuts');
+  <div id="results" class="results-section">
+    <div class="results-header">
+      <h2>Cortes prontos</h2>
+      <span class="count-badge" id="count-badge">6 cortes</span>
+    </div>
+    <div id="cuts"></div>
+  </div>
 
-    let processing = false;
-    let eventSource = null;
+  <footer>
+    <button class="btn-ghost" id="shutdown">Encerrar app</button>
+  </footer>
 
-    function setBanner(kind, text) {
-      const div = document.createElement('div');
-      div.className = `banner ${kind}`;
-      div.textContent = text;
-      banners.appendChild(div);
+</main>
+<script>
+  const dropzone    = document.getElementById('dropzone');
+  const picker      = document.getElementById('filepicker');
+  const progressWrap= document.getElementById('progress-wrap');
+  const barFill     = document.getElementById('bar-fill');
+  const stageText   = document.getElementById('stage-text');
+  const percentText = document.getElementById('percent-text');
+  const logEl       = document.getElementById('log');
+  const banners     = document.getElementById('banners');
+  const resultsPanel= document.getElementById('results');
+  const cutsEl      = document.getElementById('cuts');
+
+  let processing = false;
+  let eventSource = null;
+
+  /* ── STEPPER ── */
+  const STAGE_TO_STEP = {
+    upload:0, probe:0,
+    transcribe:1,
+    select:2, ass:2,
+    outro:3, render:3, concat:3,
+    instagram:4,
+    drive:5, done:5,
+  };
+
+  function updateStepper(stage) {
+    const si = STAGE_TO_STEP[stage];
+    if (si === undefined) return;
+    document.querySelectorAll('.step').forEach((el, i) => {
+      const dot = el.querySelector('.step-dot');
+      el.classList.remove('done', 'active');
+      if (i < si)      { el.classList.add('done');   dot.textContent = '✓'; }
+      else if (i === si){ el.classList.add('active'); dot.textContent = i + 1; }
+      else              { dot.textContent = i + 1; }
+    });
+    document.querySelectorAll('.step-line').forEach((el, i) => {
+      el.classList.toggle('done', i < si);
+    });
+  }
+
+  function finishStepper() {
+    document.querySelectorAll('.step').forEach(el => {
+      el.classList.remove('active'); el.classList.add('done');
+      el.querySelector('.step-dot').textContent = '✓';
+    });
+    document.querySelectorAll('.step-line').forEach(el => el.classList.add('done'));
+  }
+
+  /* ── BANNER ── */
+  function setBanner(kind, text) {
+    const div = document.createElement('div');
+    div.className = `banner ${kind}`;
+    const dot = document.createElement('span');
+    dot.className = 'banner-dot';
+    const msg = document.createElement('span');
+    msg.textContent = text;
+    div.appendChild(dot); div.appendChild(msg);
+    banners.appendChild(div);
+  }
+  function clearBanners() { banners.innerHTML = ''; }
+
+  /* ── LOG ── */
+  function log(msg, level) {
+    const ts = new Date().toLocaleTimeString();
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    const t = document.createElement('span'); t.className = 'ts'; t.textContent = ts;
+    const b = document.createElement('span'); if (level) b.className = level; b.textContent = msg;
+    line.appendChild(t); line.appendChild(b);
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  /* ── PROGRESS ── */
+  function setProgress(percent, stage) {
+    const p = Math.max(0, Math.min(100, percent || 0));
+    barFill.style.width = p.toFixed(1) + '%';
+    percentText.textContent = p.toFixed(0) + '%';
+    if (stage) stageText.textContent = stage;
+  }
+
+  function setProcessing(yes) {
+    processing = yes;
+    dropzone.classList.toggle('disabled', yes);
+  }
+
+  /* ── UPLOAD ── */
+  function startUpload(file) {
+    if (processing) { log('Aguarde o processo atual terminar.', 'warn'); return; }
+    if (!file.type.startsWith('video/')) {
+      setBanner('err', 'Tipo de arquivo não suportado: ' + (file.type || file.name)); return;
     }
+    clearBanners();
+    resultsPanel.classList.remove('show');
+    cutsEl.innerHTML = '';
+    logEl.innerHTML = '';
+    progressWrap.classList.add('show');
+    setProcessing(true);
+    setProgress(2, `Enviando ${file.name}…`);
+    log(`Upload de ${file.name} (${(file.size / 1_000_000).toFixed(1)} MB)`);
 
-    function clearBanners() { banners.innerHTML = ''; }
-
-    function log(msg, level) {
-      const ts = new Date().toLocaleTimeString();
-      const line = document.createElement('div');
-      const span = document.createElement('span');
-      span.className = 'ts';
-      span.textContent = ts;
-      line.appendChild(span);
-      const body = document.createElement('span');
-      if (level) body.className = level;
-      body.textContent = msg;
-      line.appendChild(body);
-      logEl.appendChild(line);
-      logEl.scrollTop = logEl.scrollHeight;
-    }
-
-    function setProgress(percent, stage) {
-      const p = Math.max(0, Math.min(100, percent || 0));
-      barFill.style.width = p.toFixed(1) + '%';
-      percentText.textContent = p.toFixed(0) + '%';
-      if (stage) stageText.textContent = stage;
-    }
-
-    function setProcessing(yes) {
-      processing = yes;
-      dropzone.classList.toggle('disabled', yes);
-    }
-
-    function startUpload(file) {
-      if (processing) {
-        log('Aguarde o processo atual terminar.', 'warn');
-        return;
-      }
-      if (!file.type.startsWith('video/')) {
-        setBanner('err', 'Tipo de arquivo não suportado: ' + (file.type || file.name));
-        return;
-      }
-
-      clearBanners();
-      resultsPanel.classList.remove('show');
-      cutsEl.innerHTML = '';
-      logEl.innerHTML = '';
-      progressWrap.classList.add('show');
-      setProcessing(true);
-      setProgress(2, `Enviando ${file.name}…`);
-      log(`Upload de ${file.name} (${(file.size / 1_000_000).toFixed(1)} MB)`);
-
-      const form = new FormData();
-      form.append('video', file);
-
-      fetch('/upload', { method: 'POST', body: form })
-        .then(async (r) => {
-          if (!r.ok) {
-            const text = await r.text();
-            throw new Error(`HTTP ${r.status}: ${text}`);
-          }
-          return r.json();
-        })
-        .then(() => openStream())
-        .catch((e) => {
-          setBanner('err', 'Falha no upload: ' + e.message);
-          setProcessing(false);
-          progressWrap.classList.remove('show');
-        });
-    }
-
-    function openStream() {
-      if (eventSource) eventSource.close();
-      eventSource = new EventSource('/events');
-      eventSource.onmessage = (ev) => {
-        let data;
-        try { data = JSON.parse(ev.data); } catch (e) { return; }
-        handleEvent(data);
-      };
-      eventSource.onerror = () => {
-        // EventSource auto-reconnects unless we close
-      };
-    }
-
-    function handleEvent(ev) {
-      if (ev.type === 'progress') {
-        const stage = ev.stage || '';
-        const msg = ev.message || stageLabel(stage, ev);
-        setProgress(ev.percent || 0, msg);
-      } else if (ev.type === 'stage') {
-        setProgress(ev.percent || 0, ev.message || stageLabel(ev.stage));
-        log(ev.message || `Iniciando ${ev.stage}`);
-      } else if (ev.type === 'log') {
-        log(`[${ev.stage}] ${ev.message}`);
-      } else if (ev.type === 'done') {
-        setProgress(100, 'Concluído');
-        log('Pipeline finalizado.');
-        renderResults(ev.data || {});
+    const form = new FormData();
+    form.append('video', file);
+    fetch('/upload', { method: 'POST', body: form })
+      .then(async r => {
+        if (!r.ok) { const t = await r.text(); throw new Error(`HTTP ${r.status}: ${t}`); }
+        return r.json();
+      })
+      .then(() => openStream())
+      .catch(e => {
+        setBanner('err', 'Falha no upload: ' + e.message);
         setProcessing(false);
-        if (eventSource) eventSource.close();
-      } else if (ev.type === 'error') {
-        log(ev.message, 'err');
-        setBanner('err', 'Erro: ' + ev.message);
-        setProcessing(false);
-        if (eventSource) eventSource.close();
-      }
-    }
-
-    function stageLabel(stage, ev) {
-      const map = {
-        upload: 'Enviando',
-        probe: 'Inspecionando',
-        transcribe: 'Transcrevendo',
-        select: 'Selecionando cortes',
-        ass: 'Gerando legendas',
-        outro: 'Renderizando logo final',
-        render: 'Renderizando cortes',
-        concat: 'Finalizando MP4s',
-        instagram: 'Gerando legendas Instagram',
-        drive: 'Enviando ao Drive',
-        done: 'Concluído',
-      };
-      if (stage === 'render' && ev && ev.cut_idx) {
-        const sub = Math.round((ev.sub_fraction || 0) * 100);
-        return `Renderizando corte ${ev.cut_idx} de ${ev.cut_total} — ${sub}%`;
-      }
-      if (stage === 'drive' && ev && ev.file_idx) {
-        return `Enviando arquivo ${ev.file_idx} de ${ev.file_total}`;
-      }
-      return map[stage] || stage;
-    }
-
-    function renderResults(data) {
-      if (data.fallback_reason || data.selection_mode === 'heuristic') {
-        setBanner('warn', `Seleção semântica indisponível (motivo: ${data.fallback_reason || 'desconhecido'}). Usando heurística.`);
-      }
-      if (data.drive_error) {
-        setBanner('warn', `Upload ao Drive falhou: ${data.drive_error}. Arquivos locais preservados em ${data.out_dir}.`);
-      }
-      if (data.instagram_skipped) {
-        setBanner('warn', `Legendas Instagram não geradas — motivo: ${data.instagram_skip_reason || 'desconhecido'}.`);
-      }
-      resultsPanel.classList.add('show');
-      cutsEl.innerHTML = '';
-      (data.cuts || []).forEach((c) => {
-        const item = document.createElement('div');
-        item.className = 'cut';
-        const head = document.createElement('div');
-        head.className = 'head';
-        head.innerHTML = `<span class="idx">${c.idx}.</span><span class="title"></span>`;
-        head.querySelector('.title').textContent = c.title || c.slug;
-        item.appendChild(head);
-        if (c.rationale) {
-          const r = document.createElement('div');
-          r.className = 'rat';
-          r.textContent = c.rationale;
-          item.appendChild(r);
-        }
-        const meta = document.createElement('div');
-        meta.className = 'meta';
-        meta.appendChild(textNode(`${c.file} · ${c.duration}s`));
-        if (c.drive_url) {
-          const a = document.createElement('a');
-          a.href = c.drive_url;
-          a.target = '_blank';
-          a.rel = 'noopener';
-          a.textContent = 'Abrir no Drive';
-          meta.appendChild(a);
-        }
-        item.appendChild(meta);
-        if (c.instagram) item.appendChild(renderInstagram(c.instagram));
-        cutsEl.appendChild(item);
+        progressWrap.classList.remove('show');
       });
-    }
+  }
 
-    function renderInstagram(ig) {
-      const wrap = document.createElement('div');
-      wrap.className = 'ig';
+  function openStream() {
+    if (eventSource) eventSource.close();
+    eventSource = new EventSource('/events');
+    eventSource.onmessage = ev => {
+      let data; try { data = JSON.parse(ev.data); } catch { return; }
+      handleEvent(data);
+    };
+  }
+
+  function handleEvent(ev) {
+    if (ev.type === 'progress') {
+      setProgress(ev.percent || 0, ev.message || stageLabel(ev.stage, ev));
+    } else if (ev.type === 'stage') {
+      updateStepper(ev.stage);
+      setProgress(ev.percent || 0, ev.message || stageLabel(ev.stage));
+      log(ev.message || `Iniciando ${ev.stage}`);
+    } else if (ev.type === 'log') {
+      log(`[${ev.stage}] ${ev.message}`);
+    } else if (ev.type === 'done') {
+      setProgress(100, 'Concluído');
+      finishStepper();
+      log('Pipeline finalizado.');
+      renderResults(ev.data || {});
+      setProcessing(false);
+      if (eventSource) eventSource.close();
+    } else if (ev.type === 'error') {
+      log(ev.message, 'err');
+      setBanner('err', 'Erro: ' + ev.message);
+      setProcessing(false);
+      if (eventSource) eventSource.close();
+    }
+  }
+
+  function stageLabel(stage, ev) {
+    const map = {
+      upload:'Enviando', probe:'Inspecionando', transcribe:'Transcrevendo',
+      select:'Selecionando cortes', ass:'Gerando legendas', outro:'Renderizando logo final',
+      render:'Renderizando cortes', concat:'Finalizando MP4s',
+      instagram:'Gerando legendas Instagram', drive:'Enviando ao Drive', done:'Concluído',
+    };
+    if (stage === 'render' && ev && ev.cut_idx)
+      return `Renderizando corte ${ev.cut_idx} de ${ev.cut_total}`;
+    if (stage === 'drive' && ev && ev.file_idx)
+      return `Enviando arquivo ${ev.file_idx} de ${ev.file_total}`;
+    return map[stage] || stage;
+  }
+
+  /* ── RESULTS ── */
+  function fmtDur(s) {
+    const sec = Math.round(s);
+    return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
+  }
+
+  function renderResults(data) {
+    if (data.fallback_reason || data.selection_mode === 'heuristic')
+      setBanner('warn', `Seleção semântica indisponível (${data.fallback_reason || 'desconhecido'}). Usando heurística.`);
+    if (data.drive_error)
+      setBanner('warn', `Upload ao Drive falhou: ${data.drive_error}. Arquivos locais em ${data.out_dir}.`);
+    if (data.instagram_skipped)
+      setBanner('warn', `Legendas Instagram não geradas — ${data.instagram_skip_reason || 'desconhecido'}.`);
+
+    const cuts = data.cuts || [];
+    document.getElementById('count-badge').textContent = `${cuts.length} cortes`;
+    resultsPanel.classList.add('show');
+    cutsEl.innerHTML = '';
+
+    cuts.forEach((c, idx) => {
+      const card = document.createElement('div');
+      card.className = 'cut';
+      card.style.setProperty('--delay', `${idx * 0.07}s`);
+
+      const num = document.createElement('div');
+      num.className = 'cut-number';
+      num.textContent = String(c.idx).padStart(2, '0');
+      card.appendChild(num);
 
       const head = document.createElement('div');
-      head.className = 'ig-head';
-      const label = document.createElement('strong');
-      label.textContent = 'Instagram';
-      const btn = document.createElement('button');
-      btn.className = 'copy-btn';
-      btn.textContent = 'Copiar';
-      btn.addEventListener('click', () => {
-        const txt = formatIgText(ig);
-        navigator.clipboard.writeText(txt).then(() => {
-          btn.textContent = 'Copiado!';
-          btn.classList.add('ok');
-          setTimeout(() => {
-            btn.textContent = 'Copiar';
-            btn.classList.remove('ok');
-          }, 1500);
-        });
+      head.className = 'cut-head';
+      const badge = document.createElement('span');
+      badge.className = 'cut-idx';
+      badge.textContent = String(c.idx).padStart(2, '0');
+      const title = document.createElement('div');
+      title.className = 'cut-title';
+      title.textContent = c.title || c.slug;
+      head.appendChild(badge); head.appendChild(title);
+      card.appendChild(head);
+
+      if (c.rationale) {
+        const rat = document.createElement('div');
+        rat.className = 'cut-rat';
+        rat.textContent = c.rationale;
+        card.appendChild(rat);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'cut-meta';
+
+      const dur = document.createElement('span');
+      dur.className = 'meta-chip';
+      dur.innerHTML = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>${fmtDur(c.duration)}`;
+      meta.appendChild(dur);
+
+      if (c.drive_url) {
+        const a = document.createElement('a');
+        a.href = c.drive_url; a.target = '_blank'; a.rel = 'noopener';
+        a.className = 'drive-btn';
+        a.innerHTML = `<svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Drive`;
+        meta.appendChild(a);
+      }
+      card.appendChild(meta);
+
+      if (c.instagram) card.appendChild(renderInstagram(c.instagram));
+      cutsEl.appendChild(card);
+    });
+  }
+
+  function renderInstagram(ig) {
+    const sec = document.createElement('div');
+    sec.className = 'ig-section';
+
+    const toggle = document.createElement('div');
+    toggle.className = 'ig-toggle';
+
+    const left = document.createElement('div');
+    left.className = 'ig-toggle-left';
+    left.innerHTML = `
+      <span class="ig-pip">
+        <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+      </span>
+      <span class="ig-label">Instagram</span>`;
+
+    const right = document.createElement('div');
+    right.className = 'ig-toggle-right';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-btn';
+    copyBtn.textContent = 'Copiar';
+    copyBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(fmtIg(ig)).then(() => {
+        copyBtn.textContent = 'Copiado ✓'; copyBtn.classList.add('ok');
+        setTimeout(() => { copyBtn.textContent = 'Copiar'; copyBtn.classList.remove('ok'); }, 1800);
       });
-      head.appendChild(label);
-      head.appendChild(btn);
-      wrap.appendChild(head);
-
-      const hook = document.createElement('div');
-      hook.className = 'ig-hook';
-      hook.textContent = ig.hook;
-      wrap.appendChild(hook);
-
-      const cap = document.createElement('div');
-      cap.className = 'ig-caption';
-      cap.textContent = ig.caption;
-      wrap.appendChild(cap);
-
-      const cta = document.createElement('div');
-      cta.className = 'ig-cta';
-      cta.textContent = ig.cta;
-      wrap.appendChild(cta);
-
-      const tags = document.createElement('div');
-      tags.className = 'ig-tags';
-      tags.textContent = (ig.hashtags || []).join(' ');
-      wrap.appendChild(tags);
-
-      return wrap;
-    }
-
-    function formatIgText(ig) {
-      const tags = (ig.hashtags || []).join(' ');
-      return `${ig.hook}\n\n${ig.caption}\n\n${ig.cta}\n\n${tags}\n`;
-    }
-
-    function textNode(t) { return document.createTextNode(t); }
-
-    // Drag & drop
-    ['dragenter', 'dragover'].forEach((evt) => {
-      dropzone.addEventListener(evt, (e) => {
-        e.preventDefault();
-        if (!processing) dropzone.classList.add('hover');
-      });
-    });
-    ['dragleave', 'drop'].forEach((evt) => {
-      dropzone.addEventListener(evt, (e) => {
-        e.preventDefault();
-        dropzone.classList.remove('hover');
-      });
-    });
-    dropzone.addEventListener('drop', (e) => {
-      const file = e.dataTransfer.files[0];
-      if (file) startUpload(file);
-    });
-    dropzone.addEventListener('click', () => {
-      if (!processing) picker.click();
-    });
-    picker.addEventListener('change', () => {
-      if (picker.files[0]) startUpload(picker.files[0]);
     });
 
-    // Startup status (warnings)
-    fetch('/api/status').then((r) => r.json()).then((s) => {
-      (s.warnings || []).forEach((w) => setBanner('warn', w));
-    });
+    const chev = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    chev.setAttribute('viewBox','0 0 24 24'); chev.classList.add('ig-chev');
+    chev.innerHTML = '<polyline points="6 9 12 15 18 9"/>';
 
-    document.getElementById('shutdown').addEventListener('click', () => {
-      if (!confirm('Encerrar o app?')) return;
-      fetch('/shutdown', { method: 'POST' });
-      setTimeout(() => { document.body.innerHTML = '<main><h1>App encerrado.</h1></main>'; }, 400);
-    });
-  </script>
+    right.appendChild(copyBtn); right.appendChild(chev);
+    toggle.appendChild(left); toggle.appendChild(right);
+    sec.appendChild(toggle);
+
+    const body = document.createElement('div');
+    body.className = 'ig-body';
+    const hook = document.createElement('div'); hook.className = 'ig-hook'; hook.textContent = ig.hook;
+    const cap  = document.createElement('div'); cap.className  = 'ig-caption'; cap.textContent = ig.caption;
+    const cta  = document.createElement('div'); cta.className  = 'ig-cta'; cta.textContent = ig.cta;
+    const tags = document.createElement('div'); tags.className = 'ig-tags'; tags.textContent = (ig.hashtags||[]).join(' ');
+    body.appendChild(hook); body.appendChild(cap); body.appendChild(cta); body.appendChild(tags);
+    sec.appendChild(body);
+
+    toggle.addEventListener('click', () => sec.classList.toggle('open'));
+    return sec;
+  }
+
+  function fmtIg(ig) {
+    return `${ig.hook}\n\n${ig.caption}\n\n${ig.cta}\n\n${(ig.hashtags||[]).join(' ')}\n`;
+  }
+
+  /* ── DRAG & DROP ── */
+  ['dragenter','dragover'].forEach(e => dropzone.addEventListener(e, ev => {
+    ev.preventDefault(); if (!processing) dropzone.classList.add('hover');
+  }));
+  ['dragleave','drop'].forEach(e => dropzone.addEventListener(e, ev => {
+    ev.preventDefault(); dropzone.classList.remove('hover');
+  }));
+  dropzone.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) startUpload(f); });
+  dropzone.addEventListener('click', () => { if (!processing) picker.click(); });
+  picker.addEventListener('change', () => { if (picker.files[0]) startUpload(picker.files[0]); });
+
+  /* ── INIT ── */
+  fetch('/api/status').then(r => r.json()).then(s => {
+    (s.warnings || []).forEach(w => setBanner('warn', w));
+  });
+
+  document.getElementById('shutdown').addEventListener('click', () => {
+    if (!confirm('Encerrar o app?')) return;
+    fetch('/shutdown', { method: 'POST' });
+    setTimeout(() => { document.body.innerHTML = '<main style="padding:40px;font-family:sans-serif;color:#9e988e">App encerrado.</main>'; }, 400);
+  });
+</script>
 </body>
 </html>
