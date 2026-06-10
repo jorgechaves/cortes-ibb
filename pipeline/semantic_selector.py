@@ -22,12 +22,23 @@ class SemanticChoice:
 
 
 SYSTEM_PROMPT = (
-    "Você é um editor de redes sociais. Recebe trechos candidatos extraídos de "
-    "uma palestra e escolhe os 6 melhores para clipes curtos. Critérios, em "
-    "ordem: (a) ideia completa e auto-contida; (b) abertura clara que prende "
-    "atenção; (c) fechamento conclusivo; (d) valor isolado quando assistido "
-    "fora de contexto; (e) diversidade temática entre os 6. Responda APENAS "
-    "com JSON válido no formato pedido, sem texto adicional."
+    "Você é um editor de redes sociais especializado em palestras cristãs. "
+    "Recebe trechos candidatos extraídos de uma palestra e os ranqueia pelos "
+    "melhores para Reels/Stories.\n\n"
+    "CRITÉRIO PRINCIPAL — ARCO NARRATIVO COMPLETO:\n"
+    "  1. Gancho de abertura: a primeira frase já prende atenção por si só; "
+    "não pode começar no meio de um raciocínio ou com pronome sem referente.\n"
+    "  2. Desenvolvimento: o trecho sustenta o interesse com argumento, história "
+    "ou reflexão — não é apenas uma lista de afirmações soltas.\n"
+    "  3. Fechamento com impacto: termina com conclusão clara, punchline, chamada "
+    "à reflexão ou pergunta retórica — nunca corta no meio de uma ideia.\n\n"
+    "CRITÉRIOS SECUNDÁRIOS:\n"
+    "  (b) Auto-suficiente: compreensível sem ter visto o restante do vídeo.\n"
+    "  (c) Diversidade temática entre os escolhidos.\n\n"
+    "Retorne os melhores candidatos em ordem decrescente de qualidade narrativa "
+    "(rank 1 = melhor arco). Inclua o máximo possível, até 12. "
+    "NÃO se preocupe com sobreposição de tempo — isso será resolvido depois.\n\n"
+    "Responda APENAS com JSON válido no formato pedido, sem texto adicional."
 )
 
 
@@ -39,8 +50,8 @@ JSON_SCHEMA = {
         "properties": {
             "selections": {
                 "type": "array",
-                "minItems": 6,
-                "maxItems": 6,
+                "minItems": 12,
+                "maxItems": 18,
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
@@ -70,21 +81,25 @@ def _build_user_message(candidates: list[Candidate], video_summary: str | None) 
         + (f"Resumo: {video_summary}\n" if video_summary else "")
         + f"Candidatos ({len(candidates)}):\n"
     )
+    n = min(18, len(candidates))
     return (
         prelude
         + json.dumps(payload, ensure_ascii=False)
-        + "\n\nEscolha exatamente 6 candidatos referenciando o `id` de cada um. "
-        + "Para cada escolha, retorne `title` (até 8 palavras), `rationale` "
-        + "(1 frase justificando) e `slug` (kebab-case, 2-3 palavras)."
+        + f"\n\nRanqueie os {n} melhores candidatos por arco narrativo (rank 1 = melhor). "
+        + "Distribua as escolhas por diferentes momentos do vídeo para cobrir toda a palestra. "
+        + "Para cada um retorne `title` (até 8 palavras), `rationale` "
+        + "(1 frase justificando o arco) e `slug` (kebab-case, 2-3 palavras)."
     )
 
 
-def _validate_selections(
+def _validate_ranked(
     raw: dict, candidates_by_id: dict[int, Candidate]
 ) -> list[SemanticChoice]:
     sels = raw.get("selections")
-    if not isinstance(sels, list) or len(sels) != 6:
-        raise SemanticSelectionFailure(f"expected 6 selections, got {len(sels) if isinstance(sels, list) else 'none'}")
+    if not isinstance(sels, list) or len(sels) < 6:
+        raise SemanticSelectionFailure(
+            f"expected at least 6 selections, got {len(sels) if isinstance(sels, list) else 'none'}"
+        )
     seen: set[int] = set()
     out: list[SemanticChoice] = []
     for s in sels:
@@ -110,6 +125,24 @@ def _validate_selections(
     return out
 
 
+def _greedy_nonoverlap(
+    ranked: list[SemanticChoice], candidates_by_id: dict[int, Candidate], n: int = 6
+) -> list[SemanticChoice]:
+    """Pick up to `n` non-overlapping candidates in ranked order."""
+    picked: list[SemanticChoice] = []
+    for sel in ranked:
+        cand = candidates_by_id[sel.id]
+        if any(
+            not (cand.end <= p_cand.start or cand.start >= p_cand.end)
+            for p_cand in (candidates_by_id[p.id] for p in picked)
+        ):
+            continue
+        picked.append(sel)
+        if len(picked) == n:
+            break
+    return picked
+
+
 def choose(
     candidates: list[Candidate],
     on_event: Callable[[dict], None],
@@ -131,6 +164,7 @@ def choose(
 
     on_event({"type": "progress", "stage": "select", "fraction": 0.1})
     user_msg = _build_user_message(candidates, video_summary)
+    candidates_by_id = {c.id: c for c in candidates}
 
     last_error: Exception | None = None
     for attempt, temperature in enumerate((0.4, 0.0), start=1):
@@ -149,19 +183,23 @@ def choose(
             text = (resp.choices[0].message.content or "").strip()
             text = _extract_json(text)
             raw = json.loads(text)
-            candidates_by_id = {c.id: c for c in candidates}
-            sels = _validate_selections(raw, candidates_by_id)
+            ranked = _validate_ranked(raw, candidates_by_id)
+
+            picked = _greedy_nonoverlap(ranked, candidates_by_id)
+            if len(picked) < 6:
+                raise SemanticSelectionFailure(
+                    f"only {len(picked)} non-overlapping cuts found in ranked list of {len(ranked)}"
+                )
+
             usage = resp.usage
             if usage:
                 on_event({"type": "log", "stage": "select", "message": f"OpenAI {model}: {usage.prompt_tokens} in / {usage.completion_tokens} out"})
             on_event({"type": "progress", "stage": "select", "fraction": 1.0})
 
-            chosen = sorted(
-                ((candidates_by_id[s.id], s) for s in sels),
-                key=lambda pair: pair[0].start,
-            )
+            chosen = sorted(picked, key=lambda s: candidates_by_id[s.id].start)
             cuts: list[HeuristicCut] = []
-            for idx, (cand, sel) in enumerate(chosen, start=1):
+            for idx, sel in enumerate(chosen, start=1):
+                cand = candidates_by_id[sel.id]
                 cuts.append(HeuristicCut(
                     idx=idx,
                     start=cand.start,

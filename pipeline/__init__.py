@@ -85,6 +85,9 @@ def run(
 
     emit({"type": "stage", "stage": "select", "message": "Selecionando 6 cortes"})
     candidates = _selector.gather_candidates(words)
+    if len(candidates) < 6:
+        emit({"type": "log", "stage": "select", "message": f"Apenas {len(candidates)} candidatos com 60s mín; tentando com 45s"})
+        candidates = _selector.gather_candidates(words, target_min=45.0)
     emit({"type": "log", "stage": "select", "message": f"{len(candidates)} candidatos gerados"})
 
     selection_mode = "semantic"

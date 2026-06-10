@@ -52,10 +52,10 @@ def _gather_boundaries(words: list[Word], min_pause: float) -> list[tuple[int, b
 def gather_candidates(
     words: list[Word],
     *,
-    target_min: float = 50.0,
-    target_max: float = 75.0,
+    target_min: float = 60.0,
+    target_max: float = 180.0,
     min_pause: float = 0.7,
-    max_candidates: int = 20,
+    max_candidates: int = 50,
 ) -> list[Candidate]:
     if not words:
         return []
@@ -63,11 +63,10 @@ def gather_candidates(
     boundaries = _gather_boundaries(words, min_pause)
     raw: list[Candidate] = []
     bid = 0
-    target_mid = (target_min + target_max) / 2
 
     for si, (start_idx, start_strong) in enumerate(boundaries[:-1]):
-        # For this start boundary, pick the end that is closest to target_mid and strong.
-        best: tuple[float, int, bool] | None = None  # (distance, end_idx, end_strong)
+        # Collect ALL strong endpoints within [target_min, target_max] for this start.
+        # Multiple endpoints per start let the LLM pick the one with the best narrative arc.
         for ei in range(si + 1, len(boundaries)):
             end_idx, end_strong = boundaries[ei]
             if end_idx == start_idx:
@@ -79,44 +78,38 @@ def gather_candidates(
                 break
             if not end_strong:
                 continue
-            dist = abs(dur - target_mid)
-            if best is None or dist < best[0]:
-                best = (dist, end_idx, end_strong)
-        if best is None:
-            continue
-        _, end_idx, end_strong = best
-        text = " ".join(w.text for w in words[start_idx:end_idx]).strip()
-        bid += 1
-        raw.append(Candidate(
-            id=bid,
-            start=words[start_idx].start,
-            end=words[end_idx - 1].end,
-            text=text,
-            strong_start=start_strong,
-            strong_end=end_strong,
-        ))
+            text = " ".join(w.text for w in words[start_idx:end_idx]).strip()
+            bid += 1
+            raw.append(Candidate(
+                id=bid,
+                start=words[start_idx].start,
+                end=words[end_idx - 1].end,
+                text=text,
+                strong_start=start_strong,
+                strong_end=end_strong,
+            ))
 
     if not raw:
         return []
 
-    # Distribute across 6 bins.
+    # Distribute across 6 bins, up to ceil(max_candidates/6) per bin.
     total_span = max(raw, key=lambda c: c.end).end - min(raw, key=lambda c: c.start).start
     bin_size = total_span / 6 if total_span > 0 else 1.0
     base = min(raw, key=lambda c: c.start).start
+    per_bin = max(1, -(-max_candidates // 6))  # ceiling division
 
     bins: dict[int, list[Candidate]] = {}
     for c in raw:
         idx = min(5, int((c.start - base) / bin_size))
         bins.setdefault(idx, []).append(c)
 
-    # Prefer strong-start candidates in each bin; cap at 4 per bin.
+    # Prefer strong-start candidates in each bin.
     selected: list[Candidate] = []
     for idx in range(6):
-        bucket = sorted(bins.get(idx, []), key=lambda c: (not c.strong_start, c.start))[:4]
+        bucket = sorted(bins.get(idx, []), key=lambda c: (not c.strong_start, c.start))[:per_bin]
         selected.extend(bucket)
 
     if len(selected) > max_candidates:
-        # Trim by evenly sampling across the full list.
         step = len(selected) / max_candidates
         selected = [selected[int(i * step)] for i in range(max_candidates)]
 
