@@ -186,10 +186,36 @@ def choose(
             ranked = _validate_ranked(raw, candidates_by_id)
 
             picked = _greedy_nonoverlap(ranked, candidates_by_id)
+
+            # If the ranked list didn't yield 10, fill remaining slots from
+            # unranked candidates in chronological order.
             if len(picked) < 10:
-                raise SemanticSelectionFailure(
-                    f"only {len(picked)} non-overlapping cuts found in ranked list of {len(ranked)}"
+                ranked_ids = {s.id for s in ranked}
+                unranked = sorted(
+                    (c for c in candidates if c.id not in ranked_ids),
+                    key=lambda c: c.start,
                 )
+                for cand in unranked:
+                    if any(
+                        not (cand.end <= candidates_by_id[p.id].start or cand.start >= candidates_by_id[p.id].end)
+                        for p in picked
+                    ):
+                        continue
+                    slug = _slug_from_text(cand.text)
+                    title = " ".join(cand.text.split()[:6]).rstrip(",.!?…")
+                    picked.append(SemanticChoice(
+                        id=cand.id,
+                        title=title,
+                        rationale=None,
+                        slug=slug or f"corte-{cand.id}",
+                    ))
+                    if len(picked) == 10:
+                        break
+                if len(picked) < 10:
+                    raise SemanticSelectionFailure(
+                        f"only {len(picked)} non-overlapping cuts available (ranked + unranked)"
+                    )
+                on_event({"type": "log", "stage": "select", "message": f"{10 - len([s for s in picked if s.id in ranked_ids])} slot(s) preenchidos com candidatos não-ranqueados"})
 
             usage = resp.usage
             if usage:
