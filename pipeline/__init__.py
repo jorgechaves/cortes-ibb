@@ -83,9 +83,9 @@ def run(
     words = _transcribe.transcribe(source, out_dir, info.duration, emit)
     emit({"type": "progress", "stage": "transcribe", "fraction": 1.0})
 
-    emit({"type": "stage", "stage": "select", "message": "Selecionando 6 cortes"})
+    emit({"type": "stage", "stage": "select", "message": "Selecionando 10 cortes"})
     candidates = _selector.gather_candidates(words)
-    if len(candidates) < 6:
+    if len(candidates) < 10:
         emit({"type": "log", "stage": "select", "message": f"Apenas {len(candidates)} candidatos com 60s mín; tentando com 45s"})
         candidates = _selector.gather_candidates(words, target_min=45.0)
     emit({"type": "log", "stage": "select", "message": f"{len(candidates)} candidatos gerados"})
@@ -101,9 +101,9 @@ def run(
         selection_mode = "heuristic"
         fallback_reason = str(e)
         emit({"type": "log", "stage": "select", "message": f"Fallback heurístico: {e}"})
-        cuts = _selector.pick_six_heuristic(candidates)
+        cuts = _selector.pick_n_heuristic(candidates)
 
-    if len(cuts) < 6:
+    if len(cuts) < 10:
         emit({"type": "error", "stage": "select", "message": f"Apenas {len(cuts)} cortes possíveis. Vídeo curto demais ou sem pausas suficientes."})
         raise RuntimeError(f"only {len(cuts)} cuts available")
 

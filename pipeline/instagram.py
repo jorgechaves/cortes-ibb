@@ -42,8 +42,8 @@ JSON_SCHEMA = {
         "properties": {
             "posts": {
                 "type": "array",
-                "minItems": 6,
-                "maxItems": 6,
+                "minItems": 10,
+                "maxItems": 10,
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
@@ -109,7 +109,7 @@ def _normalize_hashtags(tags: list[str]) -> list[str]:
 
 def _validate(raw: dict) -> list[InstagramPost] | None:
     posts = raw.get("posts")
-    if not isinstance(posts, list) or len(posts) != 6:
+    if not isinstance(posts, list) or len(posts) != 10:
         return None
     result: list[InstagramPost] = []
     seen_idx: set[int] = set()
@@ -120,7 +120,7 @@ def _validate(raw: dict) -> list[InstagramPost] | None:
             idx = int(p["idx"])
         except (KeyError, TypeError, ValueError):
             return None
-        if idx in seen_idx or not (1 <= idx <= 6):
+        if idx in seen_idx or not (1 <= idx <= 10):
             return None
         seen_idx.add(idx)
         hook = str(p.get("hook", "")).strip()[:80]
@@ -142,15 +142,15 @@ def generate(
     *,
     model: str | None = None,
 ) -> list[InstagramPost] | None:
-    """Retorna lista de 6 posts ou None em caso de falha (não levanta)."""
+    """Retorna lista de 10 posts ou None em caso de falha (não levanta)."""
     if not os.environ.get("OPENAI_API_KEY"):
         on_event({"type": "log", "stage": "instagram", "message": "Pulando — OPENAI_API_KEY ausente"})
         return None
     if os.environ.get("DISABLE_INSTAGRAM"):
         on_event({"type": "log", "stage": "instagram", "message": "Pulando — DISABLE_INSTAGRAM=1"})
         return None
-    if len(cuts) != 6:
-        on_event({"type": "log", "stage": "instagram", "message": f"Pulando — esperava 6 cortes, vieram {len(cuts)}"})
+    if len(cuts) != 10:
+        on_event({"type": "log", "stage": "instagram", "message": f"Pulando — esperava 10 cortes, vieram {len(cuts)}"})
         return None
 
     from openai import OpenAI

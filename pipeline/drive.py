@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
@@ -133,7 +132,7 @@ def upload_all(
             f"Pasta '{TARGET_FOLDER}' não encontrada no Drive. Crie a pasta e compartilhe com sua conta."
         )
 
-    subfolder_name = f"[{datetime.now().strftime('%Y-%m-%d')}]"
+    subfolder_name = Path(out_dir).name
     folder_id = get_or_create_folder(service, subfolder_name, parent_id)
     on_event({"type": "log", "stage": "drive", "message": f"Pasta destino: {TARGET_FOLDER}/{subfolder_name}"})
 

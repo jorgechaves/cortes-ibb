@@ -92,20 +92,20 @@ def gather_candidates(
     if not raw:
         return []
 
-    # Distribute across 6 bins, up to ceil(max_candidates/6) per bin.
+    # Distribute across 10 bins, up to ceil(max_candidates/10) per bin.
     total_span = max(raw, key=lambda c: c.end).end - min(raw, key=lambda c: c.start).start
-    bin_size = total_span / 6 if total_span > 0 else 1.0
+    bin_size = total_span / 10 if total_span > 0 else 1.0
     base = min(raw, key=lambda c: c.start).start
-    per_bin = max(1, -(-max_candidates // 6))  # ceiling division
+    per_bin = max(1, -(-max_candidates // 10))  # ceiling division
 
     bins: dict[int, list[Candidate]] = {}
     for c in raw:
-        idx = min(5, int((c.start - base) / bin_size))
+        idx = min(9, int((c.start - base) / bin_size))
         bins.setdefault(idx, []).append(c)
 
     # Prefer strong-start candidates in each bin.
     selected: list[Candidate] = []
-    for idx in range(6):
+    for idx in range(10):
         bucket = sorted(bins.get(idx, []), key=lambda c: (not c.strong_start, c.start))[:per_bin]
         selected.extend(bucket)
 
@@ -141,13 +141,13 @@ def _slug_from_text(text: str) -> str:
     return "-".join(w for w, _ in top)
 
 
-def pick_six_heuristic(candidates: list[Candidate]) -> list[HeuristicCut]:
+def pick_n_heuristic(candidates: list[Candidate], n: int = 10) -> list[HeuristicCut]:
     """Strict fallback: greedy non-overlapping, preferring strong boundaries."""
     if not candidates:
         return []
 
     strong = [c for c in candidates if c.strong_start and c.strong_end]
-    pool = strong if len(strong) >= 6 else candidates
+    pool = strong if len(strong) >= n else candidates
     pool = sorted(pool, key=lambda c: c.start)
 
     # Greedy: scan in time order, take a pick if it does not overlap previous one.
@@ -156,20 +156,20 @@ def pick_six_heuristic(candidates: list[Candidate]) -> list[HeuristicCut]:
         if picked and c.start < picked[-1].end:
             continue
         picked.append(c)
-        if len(picked) == 6:
+        if len(picked) == n:
             break
 
     # If still short, relax by trying ALL candidates (not just strong)
-    if len(picked) < 6 and pool is not candidates:
+    if len(picked) < n and pool is not candidates:
         for c in sorted(candidates, key=lambda x: x.start):
             if any(c.start < p.end and c.end > p.start for p in picked):
                 continue
             picked.append(c)
             picked.sort(key=lambda x: x.start)
-            if len(picked) == 6:
+            if len(picked) == n:
                 break
 
-    picked = sorted(picked, key=lambda c: c.start)[:6]
+    picked = sorted(picked, key=lambda c: c.start)[:n]
     cuts: list[HeuristicCut] = []
     for i, c in enumerate(picked, start=1):
         slug = _slug_from_text(c.text)

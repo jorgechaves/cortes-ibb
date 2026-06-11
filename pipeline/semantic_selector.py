@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
     "  (b) Auto-suficiente: compreensível sem ter visto o restante do vídeo.\n"
     "  (c) Diversidade temática entre os escolhidos.\n\n"
     "Retorne os melhores candidatos em ordem decrescente de qualidade narrativa "
-    "(rank 1 = melhor arco). Inclua o máximo possível, até 12. "
+    "(rank 1 = melhor arco). Inclua o máximo possível, até 20. "
     "NÃO se preocupe com sobreposição de tempo — isso será resolvido depois.\n\n"
     "Responda APENAS com JSON válido no formato pedido, sem texto adicional."
 )
@@ -50,8 +50,8 @@ JSON_SCHEMA = {
         "properties": {
             "selections": {
                 "type": "array",
-                "minItems": 12,
-                "maxItems": 18,
+                "minItems": 18,
+                "maxItems": 24,
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
@@ -81,7 +81,7 @@ def _build_user_message(candidates: list[Candidate], video_summary: str | None) 
         + (f"Resumo: {video_summary}\n" if video_summary else "")
         + f"Candidatos ({len(candidates)}):\n"
     )
-    n = min(18, len(candidates))
+    n = min(24, len(candidates))
     return (
         prelude
         + json.dumps(payload, ensure_ascii=False)
@@ -96,9 +96,9 @@ def _validate_ranked(
     raw: dict, candidates_by_id: dict[int, Candidate]
 ) -> list[SemanticChoice]:
     sels = raw.get("selections")
-    if not isinstance(sels, list) or len(sels) < 6:
+    if not isinstance(sels, list) or len(sels) < 10:
         raise SemanticSelectionFailure(
-            f"expected at least 6 selections, got {len(sels) if isinstance(sels, list) else 'none'}"
+            f"expected at least 10 selections, got {len(sels) if isinstance(sels, list) else 'none'}"
         )
     seen: set[int] = set()
     out: list[SemanticChoice] = []
@@ -126,7 +126,7 @@ def _validate_ranked(
 
 
 def _greedy_nonoverlap(
-    ranked: list[SemanticChoice], candidates_by_id: dict[int, Candidate], n: int = 6
+    ranked: list[SemanticChoice], candidates_by_id: dict[int, Candidate], n: int = 10
 ) -> list[SemanticChoice]:
     """Pick up to `n` non-overlapping candidates in ranked order."""
     picked: list[SemanticChoice] = []
@@ -154,7 +154,7 @@ def choose(
         raise SemanticSelectionFailure("missing_api_key")
     if os.environ.get("DISABLE_SEMANTIC_SELECTION"):
         raise SemanticSelectionFailure("disabled_by_env")
-    if len(candidates) < 6:
+    if len(candidates) < 10:
         raise SemanticSelectionFailure(f"not_enough_candidates ({len(candidates)})")
 
     from openai import OpenAI  # lazy
@@ -186,7 +186,7 @@ def choose(
             ranked = _validate_ranked(raw, candidates_by_id)
 
             picked = _greedy_nonoverlap(ranked, candidates_by_id)
-            if len(picked) < 6:
+            if len(picked) < 10:
                 raise SemanticSelectionFailure(
                     f"only {len(picked)} non-overlapping cuts found in ranked list of {len(ranked)}"
                 )
