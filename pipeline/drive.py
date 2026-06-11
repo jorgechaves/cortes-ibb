@@ -10,7 +10,7 @@ SCOPES = ["https://www.googleapis.com/auth/drive"]
 CONFIG_DIR = Path(os.path.expanduser("~/.config/cortes-ibb"))
 CREDENTIALS_PATH = CONFIG_DIR / "credentials.json"
 TOKEN_PATH = CONFIG_DIR / "token.json"
-TARGET_FOLDER = "videos-ibb"
+TARGET_FOLDER_ID = "1Qy9YBr3oYSxat3Mrg-VWPffF5vxuugda"
 
 
 class DriveSetupError(Exception):
@@ -126,15 +126,9 @@ def upload_all(
     on_event: Callable[[dict], None],
 ) -> list[dict]:
     service = _build_service()
-    parent_id = find_folder_id(service, TARGET_FOLDER)
-    if not parent_id:
-        raise DriveSetupError(
-            f"Pasta '{TARGET_FOLDER}' não encontrada no Drive. Crie a pasta e compartilhe com sua conta."
-        )
-
     subfolder_name = Path(out_dir).name
-    folder_id = get_or_create_folder(service, subfolder_name, parent_id)
-    on_event({"type": "log", "stage": "drive", "message": f"Pasta destino: {TARGET_FOLDER}/{subfolder_name}"})
+    folder_id = get_or_create_folder(service, subfolder_name, TARGET_FOLDER_ID)
+    on_event({"type": "log", "stage": "drive", "message": f"Pasta destino: Drive/{subfolder_name}"})
 
     results: list[dict] = []
     total = len(cuts)
