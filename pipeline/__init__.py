@@ -142,11 +142,11 @@ def run(
     _outro.build_outro(logo, str(outro_path), width=info.width, height=info.height, fps=info.fps)
     emit({"type": "progress", "stage": "outro", "fraction": 1.0})
 
-    emit({"type": "stage", "stage": "render", "message": "Renderizando os 6 cortes"})
+    emit({"type": "stage", "stage": "render", "message": f"Renderizando os {len(cuts)} cortes"})
     content_paths: list[Path] = []
     for i, c in enumerate(cuts):
         content_path = out_dir_p / f"corte-{c.idx:02d}-content.mp4"
-        emit({"type": "log", "stage": "render", "message": f"Corte {c.idx}/6 — {c.title}"})
+        emit({"type": "log", "stage": "render", "message": f"Corte {c.idx}/{len(cuts)} — {c.title}"})
         _render.render_cut(
             source, str(ass_paths[i]), icon, str(content_path),
             start=c.start, end=c.end, width=info.width, height=info.height, fps=info.fps,
