@@ -71,9 +71,16 @@ JSON_SCHEMA = {
 }
 
 
+def _truncate_text(text: str, max_words: int = 200) -> str:
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+    return " ".join(words[:max_words]) + " […]"
+
+
 def _build_user_message(candidates: list[Candidate], video_summary: str | None) -> str:
     payload = [
-        {"id": c.id, "start": round(c.start, 2), "end": round(c.end, 2), "text": c.text}
+        {"id": c.id, "start": round(c.start, 2), "end": round(c.end, 2), "text": _truncate_text(c.text)}
         for c in candidates
     ]
     prelude = (
@@ -159,7 +166,7 @@ def choose(
 
     from openai import OpenAI  # lazy
 
-    client = OpenAI(timeout=30.0)
+    client = OpenAI(timeout=120.0)
     model = model or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
     on_event({"type": "progress", "stage": "select", "fraction": 0.1})
