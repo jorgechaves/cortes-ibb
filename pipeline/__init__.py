@@ -103,9 +103,12 @@ def run(
         emit({"type": "log", "stage": "select", "message": f"Fallback heurístico: {e}"})
         cuts = _selector.pick_n_heuristic(candidates)
 
+    if len(cuts) == 0:
+        emit({"type": "error", "stage": "select", "message": "Nenhum corte encontrado. Vídeo inválido ou sem fala."})
+        raise RuntimeError("no cuts available")
     if len(cuts) < 10:
-        emit({"type": "error", "stage": "select", "message": f"Apenas {len(cuts)} cortes possíveis. Vídeo curto demais ou sem pausas suficientes."})
-        raise RuntimeError(f"only {len(cuts)} cuts available")
+        emit({"type": "log", "stage": "select", "message": f"Aviso: apenas {len(cuts)} cortes encontrados (vídeo curto ou poucas pausas). Continuando com {len(cuts)}."})
+
 
     cuts_json = {
         "selection_mode": selection_mode,

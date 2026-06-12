@@ -34,39 +34,40 @@ SYSTEM_PROMPT = (
 )
 
 
-JSON_SCHEMA = {
-    "name": "instagram_posts",
-    "schema": {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "posts": {
-                "type": "array",
-                "minItems": 10,
-                "maxItems": 10,
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "idx": {"type": "integer"},
-                        "hook": {"type": "string"},
-                        "caption": {"type": "string"},
-                        "cta": {"type": "string"},
-                        "hashtags": {
-                            "type": "array",
-                            "minItems": 10,
-                            "maxItems": 15,
-                            "items": {"type": "string"},
+def _make_schema(n: int) -> dict:
+    return {
+        "name": "instagram_posts",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "posts": {
+                    "type": "array",
+                    "minItems": n,
+                    "maxItems": n,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "idx": {"type": "integer"},
+                            "hook": {"type": "string"},
+                            "caption": {"type": "string"},
+                            "cta": {"type": "string"},
+                            "hashtags": {
+                                "type": "array",
+                                "minItems": 10,
+                                "maxItems": 15,
+                                "items": {"type": "string"},
+                            },
                         },
+                        "required": ["idx", "hook", "caption", "cta", "hashtags"],
                     },
-                    "required": ["idx", "hook", "caption", "cta", "hashtags"],
                 },
             },
+            "required": ["posts"],
         },
-        "required": ["posts"],
-    },
-    "strict": True,
-}
+        "strict": True,
+    }
 
 
 def _build_user_message(cuts: list[dict]) -> str:
@@ -107,9 +108,9 @@ def _normalize_hashtags(tags: list[str]) -> list[str]:
     return out
 
 
-def _validate(raw: dict) -> list[InstagramPost] | None:
+def _validate(raw: dict, n: int = 10) -> list[InstagramPost] | None:
     posts = raw.get("posts")
-    if not isinstance(posts, list) or len(posts) != 10:
+    if not isinstance(posts, list) or len(posts) != n:
         return None
     result: list[InstagramPost] = []
     seen_idx: set[int] = set()
@@ -120,7 +121,7 @@ def _validate(raw: dict) -> list[InstagramPost] | None:
             idx = int(p["idx"])
         except (KeyError, TypeError, ValueError):
             return None
-        if idx in seen_idx or not (1 <= idx <= 10):
+        if idx in seen_idx or not (1 <= idx <= n):
             return None
         seen_idx.add(idx)
         hook = str(p.get("hook", "")).strip()[:80]
@@ -142,22 +143,24 @@ def generate(
     *,
     model: str | None = None,
 ) -> list[InstagramPost] | None:
-    """Retorna lista de 10 posts ou None em caso de falha (não levanta)."""
+    """Retorna lista de N posts (um por corte) ou None em caso de falha (não levanta)."""
     if not os.environ.get("OPENAI_API_KEY"):
         on_event({"type": "log", "stage": "instagram", "message": "Pulando — OPENAI_API_KEY ausente"})
         return None
     if os.environ.get("DISABLE_INSTAGRAM"):
         on_event({"type": "log", "stage": "instagram", "message": "Pulando — DISABLE_INSTAGRAM=1"})
         return None
-    if len(cuts) != 10:
-        on_event({"type": "log", "stage": "instagram", "message": f"Pulando — esperava 10 cortes, vieram {len(cuts)}"})
+    if len(cuts) == 0:
+        on_event({"type": "log", "stage": "instagram", "message": "Pulando — nenhum corte disponível"})
         return None
 
+    n = len(cuts)
     from openai import OpenAI
 
-    client = OpenAI(timeout=30.0)
+    client = OpenAI(timeout=60.0)
     model = model or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     user_msg = _build_user_message(cuts)
+    json_schema = _make_schema(n)
 
     on_event({"type": "progress", "stage": "instagram", "fraction": 0.1})
     last_error: Exception | None = None
@@ -170,13 +173,13 @@ def generate(
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_msg},
                 ],
-                response_format={"type": "json_schema", "json_schema": JSON_SCHEMA},
+                response_format={"type": "json_schema", "json_schema": json_schema},
                 max_tokens=4096,
             )
             on_event({"type": "progress", "stage": "instagram", "fraction": 0.7})
             text = (resp.choices[0].message.content or "").strip()
             raw = json.loads(text)
-            posts = _validate(raw)
+            posts = _validate(raw, n)
             if posts is None:
                 raise ValueError("validation_failed")
             usage = resp.usage
