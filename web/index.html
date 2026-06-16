@@ -370,6 +370,14 @@
     .btn-subtitle-yes:hover { background: var(--gold-glow); border-color: var(--gold); }
     .btn-subtitle-no { background: transparent; color: var(--text-2); }
     .btn-subtitle-no:hover { background: var(--surface-hover); color: var(--text); }
+    .transcript-divider {
+      font-size: 11px; color: var(--text-3); letter-spacing: .08em;
+      text-transform: uppercase; margin: 16px 0 12px; text-align: center;
+    }
+    .btn-subtitle-transcript {
+      width: 100%; background: transparent; color: var(--text-2);
+    }
+    .btn-subtitle-transcript:hover { background: var(--surface-hover); color: var(--text); }
   </style>
 </head>
 <body>
@@ -431,7 +439,7 @@
 
   <div id="results" class="results-section">
     <div class="results-header">
-      <h2>Cortes prontos</h2>
+      <h2 id="results-title">Cortes prontos</h2>
       <span class="count-badge" id="count-badge">6 cortes</span>
     </div>
     <div id="cuts"></div>
@@ -445,12 +453,14 @@
 
 <div id="subtitle-overlay" class="subtitle-overlay">
   <div class="subtitle-card">
-    <h2>Este vídeo terá legenda?</h2>
-    <p>As legendas são queimadas no vídeo durante o render.</p>
+    <h2>Como processar este vídeo?</h2>
+    <p>Gerar cortes para redes sociais — incluir legenda queimada?</p>
     <div class="subtitle-btns">
-      <button id="btn-with-subtitle" class="btn-subtitle btn-subtitle-yes">Sim, com legenda</button>
-      <button id="btn-no-subtitle" class="btn-subtitle btn-subtitle-no">Não, sem legenda</button>
+      <button id="btn-with-subtitle" class="btn-subtitle btn-subtitle-yes">Com legenda</button>
+      <button id="btn-no-subtitle" class="btn-subtitle btn-subtitle-no">Sem legenda</button>
     </div>
+    <div class="transcript-divider">ou</div>
+    <button id="btn-transcript-only" class="btn-subtitle btn-subtitle-transcript">Só transcrição</button>
   </div>
 </div>
 <script>
@@ -468,6 +478,7 @@
   let processing = false;
   let eventSource = null;
   let pendingFile = null;
+  let currentMode = 'cuts';
 
   /* ── STEPPER ── */
   const STAGE_TO_STEP = {
@@ -541,7 +552,8 @@
   }
 
   /* ── UPLOAD ── */
-  function startUpload(file, withSubtitle = true) {
+  function startUpload(file, withSubtitle = true, mode = 'cuts') {
+    currentMode = mode;
     if (processing) { log('Aguarde o processo atual terminar.', 'warn'); return; }
     if (!file.type.startsWith('video/')) {
       setBanner('err', 'Tipo de arquivo não suportado: ' + (file.type || file.name)); return;
@@ -558,6 +570,7 @@
     const form = new FormData();
     form.append('video', file);
     form.append('subtitle', withSubtitle ? 'true' : 'false');
+    form.append('mode', mode);
     fetch('/upload', { method: 'POST', body: form })
       .then(async r => {
         if (!r.ok) { const t = await r.text(); throw new Error(`HTTP ${r.status}: ${t}`); }
@@ -593,7 +606,11 @@
       setProgress(100, 'Concluído');
       finishStepper();
       log('Pipeline finalizado.');
-      renderResults(ev.data || {});
+      if (currentMode === 'transcript') {
+        renderTranscriptResult(ev.data || {});
+      } else {
+        renderResults(ev.data || {});
+      }
       setProcessing(false);
       if (eventSource) eventSource.close();
     } else if (ev.type === 'error') {
@@ -624,7 +641,60 @@
     return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
   }
 
+  function renderTranscriptResult(data) {
+    if (data.drive_error)
+      setBanner('warn', `Upload ao Drive falhou: ${data.drive_error}. Arquivo local disponível abaixo.`);
+
+    document.getElementById('results-title').textContent = 'Transcrição concluída';
+    document.getElementById('count-badge').style.display = 'none';
+    resultsPanel.classList.add('show');
+    cutsEl.innerHTML = '';
+
+    const card = document.createElement('div');
+    card.className = 'cut';
+    card.style.setProperty('--delay', '0s');
+
+    const head = document.createElement('div');
+    head.className = 'cut-head';
+    const title = document.createElement('div');
+    title.className = 'cut-title';
+    title.textContent = 'transcript.txt';
+    head.appendChild(title);
+    card.appendChild(head);
+
+    const rat = document.createElement('div');
+    rat.className = 'cut-rat';
+    rat.textContent = 'Transcrição completa do vídeo original, sem cortes.';
+    card.appendChild(rat);
+
+    const meta = document.createElement('div');
+    meta.className = 'cut-meta';
+
+    if (data.job_id) {
+      const a = document.createElement('a');
+      a.href = `/files/${data.job_id}/transcript.txt`;
+      a.download = 'transcript.txt';
+      a.className = 'drive-btn';
+      a.innerHTML = `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>Download`;
+      meta.appendChild(a);
+    }
+
+    if (data.transcript_drive_url) {
+      const a = document.createElement('a');
+      a.href = data.transcript_drive_url;
+      a.target = '_blank'; a.rel = 'noopener';
+      a.className = 'drive-btn';
+      a.innerHTML = `<svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Drive`;
+      meta.appendChild(a);
+    }
+
+    card.appendChild(meta);
+    cutsEl.appendChild(card);
+  }
+
   function renderResults(data) {
+    document.getElementById('results-title').textContent = 'Cortes prontos';
+    document.getElementById('count-badge').style.display = '';
     if (data.fallback_reason || data.selection_mode === 'heuristic')
       setBanner('warn', `Seleção semântica indisponível (${data.fallback_reason || 'desconhecido'}). Usando heurística.`);
     if (data.drive_error)
@@ -771,13 +841,19 @@
   document.getElementById('btn-with-subtitle').addEventListener('click', () => {
     const f = pendingFile;
     closeSubtitleModal();
-    if (f) startUpload(f, true);
+    if (f) startUpload(f, true, 'cuts');
   });
 
   document.getElementById('btn-no-subtitle').addEventListener('click', () => {
     const f = pendingFile;
     closeSubtitleModal();
-    if (f) startUpload(f, false);
+    if (f) startUpload(f, false, 'cuts');
+  });
+
+  document.getElementById('btn-transcript-only').addEventListener('click', () => {
+    const f = pendingFile;
+    closeSubtitleModal();
+    if (f) startUpload(f, false, 'transcript');
   });
 
   subtitleOverlay.addEventListener('click', e => {

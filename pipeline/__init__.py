@@ -35,6 +35,13 @@ STAGE_WEIGHTS = {
     "drive": 10,
 }
 
+TRANSCRIPT_STAGE_WEIGHTS = {
+    "upload": 5,
+    "probe": 10,
+    "transcribe": 75,
+    "drive": 10,
+}
+
 
 def _stage_offset(stage: str) -> int:
     """Cumulative percent at the *start* of `stage`."""
@@ -301,6 +308,76 @@ def _write_report(out_dir: Path, result: dict) -> None:
             lines.append(f"  - HASHTAGS: `{' '.join(ig['hashtags'])}`")
         lines.append("")
     (out_dir / "report.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def run_transcript_only(
+    source: str,
+    out_dir: str,
+    on_event: Callable[[dict], None],
+) -> dict:
+    """Execute only probe + transcribe + drive. Returns a result dict with transcript paths."""
+    out_dir_p = Path(out_dir)
+    out_dir_p.mkdir(parents=True, exist_ok=True)
+
+    def emit(ev: dict) -> None:
+        stage = ev.get("stage")
+        if stage and stage in TRANSCRIPT_STAGE_WEIGHTS:
+            off = 0
+            for s, w in TRANSCRIPT_STAGE_WEIGHTS.items():
+                if s == stage:
+                    break
+                off += w
+            w = TRANSCRIPT_STAGE_WEIGHTS[stage]
+            if ev.get("type") == "progress":
+                frac = max(0.0, min(1.0, ev.get("fraction", 0.0)))
+                ev["percent"] = round(off + w * frac, 1)
+            elif ev.get("type") == "stage":
+                ev["percent"] = round(off, 1)
+        on_event(ev)
+
+    emit({"type": "stage", "stage": "probe", "message": "Inspecionando vídeo"})
+    info = _probe.probe(source)
+    emit({"type": "log", "stage": "probe", "message": f"{info.width}x{info.height} @ {info.fps:.2f}fps, {info.duration:.0f}s"})
+    emit({"type": "progress", "stage": "probe", "fraction": 1.0})
+
+    emit({"type": "stage", "stage": "transcribe", "message": "Transcrevendo áudio"})
+    _transcribe.transcribe(source, out_dir, info.duration, emit)
+    emit({"type": "progress", "stage": "transcribe", "fraction": 1.0})
+
+    transcript_txt_path = out_dir_p / "transcript.txt"
+
+    emit({"type": "stage", "stage": "drive", "message": "Enviando para Google Drive"})
+    upload_list: list[tuple[str, str]] = []
+    if transcript_txt_path.exists():
+        upload_list.append((str(transcript_txt_path), "transcript.txt"))
+
+    drive_results: list[dict] = []
+    drive_error: str | None = None
+    try:
+        drive_results = _drive.upload_all(upload_list, out_dir, emit)
+    except _drive.DriveSetupError as e:
+        drive_error = str(e)
+        emit({"type": "log", "stage": "drive", "message": f"Drive desativado: {e}"})
+    except Exception as e:
+        drive_error = f"{type(e).__name__}: {e}"
+        emit({"type": "log", "stage": "drive", "message": f"Upload falhou: {drive_error}"})
+    emit({"type": "progress", "stage": "drive", "fraction": 1.0})
+
+    drive_by_name = {r["name"]: r for r in drive_results}
+    transcript_drive = drive_by_name.get("transcript.txt")
+
+    result = {
+        "job_id": out_dir_p.name,
+        "mode": "transcript",
+        "drive_error": drive_error,
+        "out_dir": str(out_dir_p),
+        "transcript_local_path": str(transcript_txt_path) if transcript_txt_path.exists() else None,
+        "transcript_drive_url": transcript_drive["url"] if transcript_drive else None,
+        "cuts": [],
+    }
+
+    emit({"type": "done", "stage": "done", "percent": 100.0, "data": result})
+    return result
 
 
 def check_environment() -> list[str]:

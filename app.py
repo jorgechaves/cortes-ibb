@@ -71,7 +71,7 @@ def api_status() -> JSONResponse:
 
 
 @app.post("/upload")
-async def upload(video: UploadFile = File(...), subtitle: str = Form("true")) -> JSONResponse:
+async def upload(video: UploadFile = File(...), subtitle: str = Form("true"), mode: str = Form("cuts")) -> JSONResponse:
     with_subtitles = subtitle.lower() == "true"
     with state.lock:
         if state.status == "running":
@@ -109,14 +109,39 @@ async def upload(video: UploadFile = File(...), subtitle: str = Form("true")) ->
         })
         state.queue.put({"type": "stage", "stage": "probe", "message": "Inspecionando vídeo", "percent": 5.0})
 
-        thread = threading.Thread(
-            target=_run_pipeline,
-            args=(str(source_path), str(job_dir), with_subtitles),
-            daemon=True,
-        )
+        if mode == "transcript":
+            thread = threading.Thread(
+                target=_run_transcript_only,
+                args=(str(source_path), str(job_dir)),
+                daemon=True,
+            )
+        else:
+            thread = threading.Thread(
+                target=_run_pipeline,
+                args=(str(source_path), str(job_dir), with_subtitles),
+                daemon=True,
+            )
         thread.start()
 
     return JSONResponse({"jobId": job_id, "stream": "/events"})
+
+
+def _run_transcript_only(source: str, job_dir: str) -> None:
+    def on_event(ev: dict) -> None:
+        state.queue.put(ev)
+
+    try:
+        result = pipeline_mod.run_transcript_only(source, job_dir, on_event)
+        state.queue.put({"type": "done", "stage": "done", "percent": 100.0, "data": result})
+        state.finish("done")
+    except Exception as e:
+        state.queue.put({
+            "type": "error",
+            "stage": "pipeline",
+            "message": f"{type(e).__name__}: {e}",
+            "trace": traceback.format_exc(),
+        })
+        state.finish("error")
 
 
 def _run_pipeline(source: str, job_dir: str, with_subtitles: bool = True) -> None:
