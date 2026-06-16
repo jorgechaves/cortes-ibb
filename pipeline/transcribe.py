@@ -14,6 +14,21 @@ class Word:
     text: str
 
 
+def _words_to_text(words: list["Word"], pause_threshold: float = 1.5) -> str:
+    if not words:
+        return ""
+    parts: list[str] = []
+    current_block: list[str] = [words[0].text]
+    for prev, curr in zip(words, words[1:]):
+        if curr.start - prev.end > pause_threshold:
+            parts.append(" ".join(current_block))
+            current_block = [curr.text]
+        else:
+            current_block.append(curr.text)
+    parts.append(" ".join(current_block))
+    return "\n\n".join(parts)
+
+
 def transcribe(
     source: str,
     out_dir: str,
@@ -46,5 +61,6 @@ def transcribe(
 
     out_path = Path(out_dir) / "transcript.json"
     out_path.write_text(json.dumps([asdict(w) for w in words], ensure_ascii=False, indent=2))
+    (Path(out_dir) / "transcript.txt").write_text(_words_to_text(words), encoding="utf-8")
     on_event({"type": "log", "stage": "transcribe", "message": f"{len(words)} palavras transcritas"})
     return words

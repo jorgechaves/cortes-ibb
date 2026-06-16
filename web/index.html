@@ -330,6 +330,46 @@
       padding: 7px 14px; cursor: pointer; transition: color .15s, border-color .15s;
     }
     .btn-ghost:hover { color: var(--text-2); border-color: var(--border-hi); }
+
+    /* SUBTITLE MODAL */
+    .subtitle-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(12,11,9,.85);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .subtitle-overlay.open { display: flex; }
+    .subtitle-card {
+      background: var(--surface-hi);
+      border: 1px solid var(--border-hi);
+      border-radius: var(--r-lg);
+      padding: 36px 40px 32px;
+      max-width: 420px; width: 90%;
+      text-align: center;
+    }
+    .subtitle-card h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 20px; font-weight: 700;
+      color: var(--text); margin-bottom: 10px;
+    }
+    .subtitle-card p { font-size: 13px; color: var(--text-2); margin-bottom: 28px; }
+    .subtitle-btns { display: flex; gap: 12px; justify-content: center; }
+    .btn-subtitle {
+      flex: 1; padding: 11px 16px;
+      border-radius: var(--r);
+      font-family: inherit; font-size: 14px; font-weight: 500;
+      cursor: pointer; border: 1.5px solid var(--border-hi);
+      transition: background .15s, border-color .15s, color .15s;
+    }
+    .btn-subtitle-yes {
+      background: var(--gold-dim); color: var(--gold-bright);
+      border-color: rgba(196,150,58,.35);
+    }
+    .btn-subtitle-yes:hover { background: var(--gold-glow); border-color: var(--gold); }
+    .btn-subtitle-no { background: transparent; color: var(--text-2); }
+    .btn-subtitle-no:hover { background: var(--surface-hover); color: var(--text); }
   </style>
 </head>
 <body>
@@ -402,6 +442,17 @@
   </footer>
 
 </main>
+
+<div id="subtitle-overlay" class="subtitle-overlay">
+  <div class="subtitle-card">
+    <h2>Este vídeo terá legenda?</h2>
+    <p>As legendas são queimadas no vídeo durante o render.</p>
+    <div class="subtitle-btns">
+      <button id="btn-with-subtitle" class="btn-subtitle btn-subtitle-yes">Sim, com legenda</button>
+      <button id="btn-no-subtitle" class="btn-subtitle btn-subtitle-no">Não, sem legenda</button>
+    </div>
+  </div>
+</div>
 <script>
   const dropzone    = document.getElementById('dropzone');
   const picker      = document.getElementById('filepicker');
@@ -416,6 +467,7 @@
 
   let processing = false;
   let eventSource = null;
+  let pendingFile = null;
 
   /* ── STEPPER ── */
   const STAGE_TO_STEP = {
@@ -489,7 +541,7 @@
   }
 
   /* ── UPLOAD ── */
-  function startUpload(file) {
+  function startUpload(file, withSubtitle = true) {
     if (processing) { log('Aguarde o processo atual terminar.', 'warn'); return; }
     if (!file.type.startsWith('video/')) {
       setBanner('err', 'Tipo de arquivo não suportado: ' + (file.type || file.name)); return;
@@ -505,6 +557,7 @@
 
     const form = new FormData();
     form.append('video', file);
+    form.append('subtitle', withSubtitle ? 'true' : 'false');
     fetch('/upload', { method: 'POST', body: form })
       .then(async r => {
         if (!r.ok) { const t = await r.text(); throw new Error(`HTTP ${r.status}: ${t}`); }
@@ -583,6 +636,19 @@
     document.getElementById('count-badge').textContent = `${cuts.length} cortes`;
     resultsPanel.classList.add('show');
     cutsEl.innerHTML = '';
+
+    if (data.transcript_drive_url) {
+      const bar = document.createElement('div');
+      bar.style.cssText = 'margin-bottom:16px';
+      const a = document.createElement('a');
+      a.href = data.transcript_drive_url;
+      a.target = '_blank'; a.rel = 'noopener';
+      a.className = 'drive-btn';
+      a.style.cssText = 'display:inline-flex';
+      a.innerHTML = `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>Transcrição completa`;
+      bar.appendChild(a);
+      cutsEl.appendChild(bar);
+    }
 
     cuts.forEach((c, idx) => {
       const card = document.createElement('div');
@@ -688,6 +754,40 @@
     return `${ig.hook}\n\n${ig.caption}\n\n${ig.cta}\n\n${(ig.hashtags||[]).join(' ')}\n`;
   }
 
+  /* ── SUBTITLE MODAL ── */
+  const subtitleOverlay = document.getElementById('subtitle-overlay');
+
+  function showSubtitleModal(file) {
+    if (processing) return;
+    pendingFile = file;
+    subtitleOverlay.classList.add('open');
+  }
+
+  function closeSubtitleModal() {
+    subtitleOverlay.classList.remove('open');
+    pendingFile = null;
+  }
+
+  document.getElementById('btn-with-subtitle').addEventListener('click', () => {
+    const f = pendingFile;
+    closeSubtitleModal();
+    if (f) startUpload(f, true);
+  });
+
+  document.getElementById('btn-no-subtitle').addEventListener('click', () => {
+    const f = pendingFile;
+    closeSubtitleModal();
+    if (f) startUpload(f, false);
+  });
+
+  subtitleOverlay.addEventListener('click', e => {
+    if (e.target === subtitleOverlay) closeSubtitleModal();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && subtitleOverlay.classList.contains('open')) closeSubtitleModal();
+  });
+
   /* ── DRAG & DROP ── */
   ['dragenter','dragover'].forEach(e => dropzone.addEventListener(e, ev => {
     ev.preventDefault(); if (!processing) dropzone.classList.add('hover');
@@ -695,9 +795,9 @@
   ['dragleave','drop'].forEach(e => dropzone.addEventListener(e, ev => {
     ev.preventDefault(); dropzone.classList.remove('hover');
   }));
-  dropzone.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) startUpload(f); });
+  dropzone.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) showSubtitleModal(f); });
   dropzone.addEventListener('click', () => { if (!processing) picker.click(); });
-  picker.addEventListener('change', () => { if (picker.files[0]) startUpload(picker.files[0]); });
+  picker.addEventListener('change', () => { if (picker.files[0]) showSubtitleModal(picker.files[0]); picker.value = ''; });
 
   /* ── INIT ── */
   fetch('/api/status').then(r => r.json()).then(s => {

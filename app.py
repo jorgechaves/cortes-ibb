@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 
 load_dotenv()  # read .env in cwd before importing pipeline
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
@@ -71,7 +71,8 @@ def api_status() -> JSONResponse:
 
 
 @app.post("/upload")
-async def upload(video: UploadFile = File(...)) -> JSONResponse:
+async def upload(video: UploadFile = File(...), subtitle: str = Form("true")) -> JSONResponse:
+    with_subtitles = subtitle.lower() == "true"
     with state.lock:
         if state.status == "running":
             raise HTTPException(status_code=409, detail="job in progress")
@@ -110,7 +111,7 @@ async def upload(video: UploadFile = File(...)) -> JSONResponse:
 
         thread = threading.Thread(
             target=_run_pipeline,
-            args=(str(source_path), str(job_dir)),
+            args=(str(source_path), str(job_dir), with_subtitles),
             daemon=True,
         )
         thread.start()
@@ -118,14 +119,14 @@ async def upload(video: UploadFile = File(...)) -> JSONResponse:
     return JSONResponse({"jobId": job_id, "stream": "/events"})
 
 
-def _run_pipeline(source: str, job_dir: str) -> None:
+def _run_pipeline(source: str, job_dir: str, with_subtitles: bool = True) -> None:
     def on_event(ev: dict) -> None:
         state.queue.put(ev)
 
     try:
         if not ICON_PATH.exists() or not LOGO_PATH.exists():
             raise RuntimeError(f"icone.png ou logo.png ausente em {ROOT}")
-        result = pipeline_mod.run(source, str(ICON_PATH), str(LOGO_PATH), job_dir, on_event)
+        result = pipeline_mod.run(source, str(ICON_PATH), str(LOGO_PATH), job_dir, on_event, with_subtitles=with_subtitles)
         state.queue.put({"type": "done", "stage": "done", "percent": 100.0, "data": result})
         state.finish("done")
     except Exception as e:

@@ -14,7 +14,7 @@ def _icon_height(video_h: int) -> int:
 
 def render_cut(
     source: str,
-    ass_path: str,
+    ass_path: str | None,
     icon_path: str,
     out_path: str,
     *,
@@ -31,14 +31,18 @@ def render_cut(
     fps_int = max(1, round(fps))
     icon_h = _icon_height(height)
 
-    # Compose: subtitles first, then overlay icon at x=36,y=36
-    # NOTE: subtitles filter needs a path; we escape special chars.
-    safe_ass = ass_path.replace(":", "\\:").replace("'", "\\'")
-    filter_complex = (
-        f"[0:v]subtitles=filename='{safe_ass}'[v0];"
-        f"[1:v]scale=-1:{icon_h}[ic];"
-        f"[v0][ic]overlay=x=36:y=36[vfinal]"
-    )
+    if ass_path is not None:
+        safe_ass = ass_path.replace(":", "\\:").replace("'", "\\'")
+        filter_complex = (
+            f"[0:v]subtitles=filename='{safe_ass}'[v0];"
+            f"[1:v]scale=-1:{icon_h}[ic];"
+            f"[v0][ic]overlay=x=36:y=36[vfinal]"
+        )
+    else:
+        filter_complex = (
+            f"[1:v]scale=-1:{icon_h}[ic];"
+            f"[0:v][ic]overlay=x=36:y=36[vfinal]"
+        )
 
     cmd = [
         "ffmpeg", "-y",
