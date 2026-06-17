@@ -257,6 +257,7 @@ def run(
 
     transcript_drive = drive_by_name.get("transcript.txt")
     result = {
+        "job_id": out_dir_p.name,
         "selection_mode": selection_mode,
         "fallback_reason": fallback_reason,
         "model": model_used,

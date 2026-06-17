@@ -53,6 +53,7 @@ class JobState:
 
 
 state = JobState()
+_booklet_queues: dict[str, "queue.Queue[dict]"] = {}
 app = FastAPI(title="Cortes IBB")
 
 
@@ -197,6 +198,76 @@ def shutdown() -> JSONResponse:
         os._exit(0)
     threading.Thread(target=_bye, daemon=True).start()
     return JSONResponse({"ok": True})
+
+
+@app.post("/booklet/{job_id}")
+def start_booklet(job_id: str) -> JSONResponse:
+    job_dir = OUTPUT_DIR / job_id
+    if not job_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Job {job_id} não encontrado")
+    transcript_path = job_dir / "transcript.txt"
+    if not transcript_path.exists():
+        raise HTTPException(status_code=404, detail=f"transcript.txt não encontrado para o job {job_id}")
+
+    q: "queue.Queue[dict]" = queue.Queue()
+    _booklet_queues[job_id] = q
+
+    def _run() -> None:
+        def on_event(ev: dict) -> None:
+            q.put(ev)
+        try:
+            from pipeline import booklet as _booklet
+            pdf_path = str(job_dir / "livreto.pdf")
+            _booklet.generate_booklet(str(job_dir), str(ICON_PATH), pdf_path, on_event)
+            drive_result = _booklet.upload_booklet_to_drive(pdf_path, on_event)
+            q.put({
+                "type": "done",
+                "stage": "done",
+                "data": {
+                    "job_id": job_id,
+                    "pdf_local": pdf_path,
+                    "booklet_drive_url": drive_result["url"] if drive_result else None,
+                },
+            })
+        except Exception as e:
+            q.put({
+                "type": "error",
+                "stage": "booklet",
+                "message": f"{type(e).__name__}: {e}",
+                "trace": traceback.format_exc(),
+            })
+
+    threading.Thread(target=_run, daemon=True).start()
+    return JSONResponse({"jobId": job_id, "stream": f"/booklet/{job_id}/events"})
+
+
+@app.get("/booklet/{job_id}/events")
+async def booklet_events(job_id: str, request: Request) -> StreamingResponse:
+    def gen():
+        q = _booklet_queues.get(job_id)
+        if q is None:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'job não encontrado'})}\n\n"
+            return
+        yield "event: hello\ndata: {}\n\n"
+        while True:
+            try:
+                ev = q.get(timeout=15.0)
+            except queue.Empty:
+                yield ": keepalive\n\n"
+                continue
+            yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+            if ev.get("type") in ("done", "error"):
+                break
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # Serve files for "Open local folder" / direct download

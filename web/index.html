@@ -331,6 +331,28 @@
     }
     .btn-ghost:hover { color: var(--text-2); border-color: var(--border-hi); }
 
+    /* BOOKLET */
+    .booklet-section {
+      margin-bottom: 20px; padding: 16px 18px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
+    }
+    .booklet-label {
+      font-size: 12px; color: var(--text-3); margin-bottom: 10px;
+      letter-spacing: .01em;
+    }
+    .btn-booklet {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'DM Sans', sans-serif; font-size: 12.5px; font-weight: 500;
+      color: var(--gold); background: var(--gold-dim);
+      border: 1px solid rgba(196,150,58,.3); border-radius: 20px;
+      padding: 5px 14px; cursor: pointer;
+      transition: background .2s, border-color .2s;
+    }
+    .btn-booklet:hover:not(:disabled) { background: rgba(196,150,58,.14); border-color: rgba(196,150,58,.5); }
+    .btn-booklet:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-booklet svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .booklet-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
     /* SUBTITLE MODAL */
     .subtitle-overlay {
       display: none;
@@ -690,6 +712,10 @@
 
     card.appendChild(meta);
     cutsEl.appendChild(card);
+
+    if (data.job_id) {
+      cutsEl.appendChild(renderBookletButton(data.job_id));
+    }
   }
 
   function renderResults(data) {
@@ -768,6 +794,10 @@
       if (c.instagram) card.appendChild(renderInstagram(c.instagram));
       cutsEl.appendChild(card);
     });
+
+    if (data.job_id && data.transcript_local_path) {
+      cutsEl.appendChild(renderBookletButton(data.job_id));
+    }
   }
 
   function renderInstagram(ig) {
@@ -822,6 +852,82 @@
 
   function fmtIg(ig) {
     return `${ig.hook}\n\n${ig.caption}\n\n${ig.cta}\n\n${(ig.hashtags||[]).join(' ')}\n`;
+  }
+
+  /* ── BOOKLET ── */
+  function renderBookletButton(jobId) {
+    const section = document.createElement('div');
+    section.className = 'booklet-section';
+
+    const label = document.createElement('div');
+    label.className = 'booklet-label';
+    label.textContent = 'Gerar livreto A5 em PDF com o conteúdo da transcrição corrigida em português';
+    section.appendChild(label);
+
+    const btn = document.createElement('button');
+    btn.className = 'btn-booklet';
+    btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Gerar Livreto`;
+    btn.addEventListener('click', () => startBooklet(jobId, btn, section));
+    section.appendChild(btn);
+    return section;
+  }
+
+  function startBooklet(jobId, btn, section) {
+    btn.disabled = true;
+    btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Gerando…`;
+
+    fetch(`/booklet/${jobId}`, { method: 'POST' })
+      .then(async r => {
+        if (!r.ok) { const t = await r.text(); throw new Error(`HTTP ${r.status}: ${t}`); }
+        return r.json();
+      })
+      .then(() => {
+        const es = new EventSource(`/booklet/${jobId}/events`);
+        es.onmessage = ev => {
+          let data; try { data = JSON.parse(ev.data); } catch { return; }
+          if (data.type === 'log') {
+            log(`[livreto] ${data.message}`);
+          } else if (data.type === 'stage') {
+            log(`[livreto] ${data.message || data.stage}`);
+          } else if (data.type === 'done') {
+            es.close();
+            btn.remove();
+            const links = document.createElement('div');
+            links.className = 'booklet-links';
+            const dlA = document.createElement('a');
+            dlA.href = `/files/${jobId}/livreto.pdf`;
+            dlA.download = 'livreto.pdf';
+            dlA.className = 'drive-btn';
+            dlA.innerHTML = `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Download PDF`;
+            links.appendChild(dlA);
+            if (data.data && data.data.booklet_drive_url) {
+              const drA = document.createElement('a');
+              drA.href = data.data.booklet_drive_url;
+              drA.target = '_blank'; drA.rel = 'noopener';
+              drA.className = 'drive-btn';
+              drA.innerHTML = `<svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Drive (livros)`;
+              links.appendChild(drA);
+            }
+            section.appendChild(links);
+            log('[livreto] Livreto gerado com sucesso!');
+          } else if (data.type === 'error') {
+            es.close();
+            btn.disabled = false;
+            btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Tentar novamente`;
+            log(`[livreto] Erro: ${data.message}`, 'err');
+          }
+        };
+        es.onerror = () => {
+          es.close();
+          btn.disabled = false;
+          btn.textContent = 'Gerar Livreto';
+        };
+      })
+      .catch(e => {
+        btn.disabled = false;
+        btn.textContent = 'Gerar Livreto';
+        log(`[livreto] Falha: ${e.message}`, 'err');
+      });
   }
 
   /* ── SUBTITLE MODAL ── */

@@ -77,6 +77,7 @@ EXT_TO_MIME = {
     ".md": "text/markdown",
     ".txt": "text/plain",
     ".json": "application/json",
+    ".pdf": "application/pdf",
 }
 
 
