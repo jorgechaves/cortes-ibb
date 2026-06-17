@@ -585,7 +585,7 @@
   }
 
   /* ── UPLOAD ── */
-  function startUpload(file, withSubtitle = true, mode = 'cuts') {
+  function startUpload(file, withSubtitle = true, mode = 'cuts', titulo = '') {
     currentMode = mode;
     if (processing) { log('Aguarde o processo atual terminar.', 'warn'); return; }
     if (!file.type.startsWith('video/')) {
@@ -604,7 +604,7 @@
     form.append('video', file);
     form.append('subtitle', withSubtitle ? 'true' : 'false');
     form.append('mode', mode);
-    form.append('titulo', document.getElementById('titulo-input').value.trim());
+    form.append('titulo', titulo);
     fetch('/upload', { method: 'POST', body: form })
       .then(async r => {
         if (!r.ok) { const t = await r.text(); throw new Error(`HTTP ${r.status}: ${t}`); }
@@ -959,20 +959,23 @@
 
   document.getElementById('btn-with-subtitle').addEventListener('click', () => {
     const f = pendingFile;
+    const t = document.getElementById('titulo-input').value.trim();
     closeSubtitleModal();
-    if (f) startUpload(f, true, 'cuts');
+    if (f) startUpload(f, true, 'cuts', t);
   });
 
   document.getElementById('btn-no-subtitle').addEventListener('click', () => {
     const f = pendingFile;
+    const t = document.getElementById('titulo-input').value.trim();
     closeSubtitleModal();
-    if (f) startUpload(f, false, 'cuts');
+    if (f) startUpload(f, false, 'cuts', t);
   });
 
   document.getElementById('btn-transcript-only').addEventListener('click', () => {
     const f = pendingFile;
+    const t = document.getElementById('titulo-input').value.trim();
     closeSubtitleModal();
-    if (f) startUpload(f, false, 'transcript');
+    if (f) startUpload(f, false, 'transcript', t);
   });
 
   subtitleOverlay.addEventListener('click', e => {
