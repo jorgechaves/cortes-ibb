@@ -18,6 +18,23 @@ _ICON_SMALL = 30   # cover icon size
 _ICON_BIG = 100    # back-cover icon size
 _CONTENT_LEFT = 36 # left edge for cover text (right of vertical bar + gap)
 
+# ── Editor skill paths ────────────────────────────────────────────────────────
+_SKILL_PATH = Path(__file__).resolve().parents[1] / ".agents" / "skills" / "editor" / "SKILL.md"
+
+_SKILL_SUFFIX = (
+    "\n\n---\n"
+    "CONTEXTO ESPECÍFICO (aplique ao texto abaixo):\n"
+    "- Edite em português brasileiro.\n"
+    "- O texto é a transcrição de um sermão evangélico.\n"
+    "- Preserve citações bíblicas literalmente, sem qualquer alteração.\n"
+    "- Preserve termos teológicos e expressões de fé.\n"
+    "- NÃO resuma, NÃO omita, NÃO reordene o conteúdo.\n"
+    "- Ao identificar uma transição temática natural, prefixe o primeiro parágrafo "
+    "da nova seção com '## Título Breve' (máximo 5 palavras extraídas do texto que se segue). "
+    "Se não houver seções claras, retorne o texto sem marcadores '##'.\n"
+    "- Retorne somente o texto editado, sem comentários nem resumo de alterações."
+)
+
 
 def _make_section_rule_class():
     from reportlab.platypus import Flowable
@@ -44,70 +61,103 @@ def _section_rule():
     return _SectionRuleCls()
 
 
-def edit_text(text: str, on_event: Callable[[dict], None]) -> str:
-    """Edit PT-BR text via OpenAI in 1500-word chunks using professional editor principles. Falls back to original on error."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        on_event({"type": "log", "stage": "booklet", "message": "OPENAI_API_KEY ausente — usando texto original"})
-        return text
-
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key, timeout=60)
-    except Exception as e:
-        on_event({"type": "log", "stage": "booklet", "message": f"OpenAI indisponível: {e} — usando texto original"})
-        return text
-
-    SYSTEM = (
-        "Você é um editor profissional de português brasileiro especializado em textos de pregação e sermão. "
-        "Aplique edição completa ao texto recebido seguindo estas instruções:\n\n"
-        "CORRIJA:\n"
-        "- Ortografia, acentuação e pontuação\n"
-        "- Concordância nominal e verbal\n\n"
-        "MELHORE (sem alterar o conteúdo):\n"
-        "- Elimine redundâncias e palavras desnecessárias "
-        "(ex: 'devido ao fato de que' → 'porque'; 'a fim de' → 'para'; 'no momento atual' → 'agora')\n"
-        "- Converta voz passiva para voz ativa quando possível\n"
-        "- Fortaleça verbos fracos "
-        "(ex: 'fazer uma decisão' → 'decidir'; 'ter a capacidade de' → 'poder'; 'dar início a' → 'iniciar')\n"
-        "- Melhore a coesão entre parágrafos com conectivos adequados e transições suaves\n"
-        "- Varie a estrutura das frases para evitar monotonia\n\n"
-        "PRESERVE SEMPRE:\n"
-        "- Citações bíblicas: reproduza literalmente, sem qualquer alteração\n"
-        "- Termos teológicos, expressões de fé e vocabulário específico do sermão\n"
-        "- A ordem, a sequência e o conteúdo completo do argumento\n"
-        "- NÃO resuma, NÃO omita, NÃO reordene parágrafos, NÃO invente conteúdo\n\n"
-        "SEÇÕES:\n"
-        "Ao identificar uma transição temática natural no sermão, prefixe o primeiro parágrafo "
-        "dessa nova seção com '## Título Breve' (máximo 5 palavras extraídas do próprio texto que se segue). "
-        "Se não houver seções claras, retorne o texto sem marcadores '##'.\n\n"
-        "Retorne somente o texto editado, sem comentários, sem resumo de alterações."
+def _edit_chunk_with_claude(chunk: str, system_prompt: str, model: str, client) -> str:
+    """Send one chunk to Claude for editing. Raises on error."""
+    msg = client.messages.create(
+        model=model,
+        max_tokens=4096,
+        system=system_prompt,
+        messages=[{"role": "user", "content": chunk}],
     )
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    return msg.content[0].text.strip()
+
+
+def _edit_chunk_with_openai(chunk: str, system_prompt: str, model: str, client) -> str:
+    """Send one chunk to OpenAI for editing. Raises on error."""
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": chunk},
+        ],
+    )
+    return resp.choices[0].message.content.strip()
+
+
+_OPENAI_SYSTEM = (
+    "Você é um editor profissional de português brasileiro especializado em textos de pregação e sermão. "
+    "Corrija ortografia, acentuação, concordância. Elimine redundâncias, converta voz passiva para ativa, "
+    "fortaleça verbos fracos, melhore coesão entre parágrafos. "
+    "Preserve citações bíblicas literalmente e termos teológicos. "
+    "NÃO resuma, NÃO omita, NÃO reordene. "
+    "Ao identificar transição temática, prefixe com '## Título Breve' (máx 5 palavras do texto que se segue). "
+    "Retorne somente o texto editado, sem comentários."
+)
+
+
+def edit_text(text: str, on_event: Callable[[dict], None]) -> str:
+    """Edit PT-BR text using the /editor skill via Claude (Anthropic), falling back to OpenAI then original."""
     words = text.split()
     CHUNK = 1500
     chunks = [" ".join(words[i:i + CHUNK]) for i in range(0, len(words), CHUNK)]
-    edited: list[str] = []
 
     on_event({"type": "log", "stage": "booklet", "message": "Revisando e melhorando o texto em português brasileiro"})
 
-    for i, chunk in enumerate(chunks):
-        on_event({"type": "progress", "stage": "booklet", "fraction": 0.1 + 0.4 * i / len(chunks)})
+    # ── Level 1: Anthropic + /editor SKILL.md ────────────────────────────────
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    if anthropic_key and _SKILL_PATH.exists():
         try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": SYSTEM},
-                    {"role": "user", "content": chunk},
-                ],
-            )
-            edited.append(resp.choices[0].message.content.strip())
+            import anthropic as _anthropic
+            claude_model = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+            client = _anthropic.Anthropic(api_key=anthropic_key)
+            skill_content = _SKILL_PATH.read_text(encoding="utf-8")
+            # Strip YAML frontmatter (between --- markers)
+            lines = skill_content.splitlines()
+            if lines and lines[0].strip() == "---":
+                end = next((i for i, l in enumerate(lines[1:], 1) if l.strip() == "---"), None)
+                if end:
+                    skill_content = "\n".join(lines[end + 1:]).lstrip()
+            system_prompt = skill_content + _SKILL_SUFFIX
+            on_event({"type": "log", "stage": "booklet", "message": f"Usando skill /editor via Claude ({claude_model})"})
+            edited: list[str] = []
+            for i, chunk in enumerate(chunks):
+                on_event({"type": "progress", "stage": "booklet", "fraction": 0.1 + 0.4 * i / len(chunks)})
+                try:
+                    edited.append(_edit_chunk_with_claude(chunk, system_prompt, claude_model, client))
+                except Exception as e:
+                    on_event({"type": "log", "stage": "booklet", "message": f"Claude chunk {i + 1}/{len(chunks)} falhou: {e}"})
+                    edited.append(chunk)
+            on_event({"type": "log", "stage": "booklet", "message": f"Texto revisado em {len(chunks)} chunk(s) via Claude"})
+            return "\n\n".join(edited)
         except Exception as e:
-            on_event({"type": "log", "stage": "booklet", "message": f"Chunk {i + 1}/{len(chunks)} falhou: {e}"})
-            edited.append(chunk)
+            on_event({"type": "log", "stage": "booklet", "message": f"Anthropic indisponível: {e} — tentando OpenAI"})
+    elif anthropic_key and not _SKILL_PATH.exists():
+        on_event({"type": "log", "stage": "booklet", "message": f"SKILL.md não encontrado em {_SKILL_PATH} — usando OpenAI como fallback"})
 
-    on_event({"type": "log", "stage": "booklet", "message": f"Texto revisado em {len(chunks)} chunk(s)"})
-    return "\n\n".join(edited)
+    # ── Level 2: OpenAI fallback ──────────────────────────────────────────────
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if openai_key:
+        try:
+            from openai import OpenAI
+            oai_client = OpenAI(api_key=openai_key, timeout=60)
+            oai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+            on_event({"type": "log", "stage": "booklet", "message": f"Usando OpenAI ({oai_model}) como fallback"})
+            edited = []
+            for i, chunk in enumerate(chunks):
+                on_event({"type": "progress", "stage": "booklet", "fraction": 0.1 + 0.4 * i / len(chunks)})
+                try:
+                    edited.append(_edit_chunk_with_openai(chunk, _OPENAI_SYSTEM, oai_model, oai_client))
+                except Exception as e:
+                    on_event({"type": "log", "stage": "booklet", "message": f"OpenAI chunk {i + 1}/{len(chunks)} falhou: {e}"})
+                    edited.append(chunk)
+            on_event({"type": "log", "stage": "booklet", "message": f"Texto revisado em {len(chunks)} chunk(s) via OpenAI"})
+            return "\n\n".join(edited)
+        except Exception as e:
+            on_event({"type": "log", "stage": "booklet", "message": f"OpenAI indisponível: {e} — usando texto original"})
+
+    # ── Level 3: original text ────────────────────────────────────────────────
+    on_event({"type": "log", "stage": "booklet", "message": "Nenhuma API configurada — usando texto original"})
+    return text
 
 
 def _extract_title(text: str, fallback: str) -> str:

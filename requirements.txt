@@ -8,3 +8,4 @@ google-auth-oauthlib>=1.2
 openai>=1.50
 python-dotenv>=1.0
 reportlab>=4.0
+anthropic>=0.40
