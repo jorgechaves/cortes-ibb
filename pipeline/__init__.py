@@ -2,12 +2,24 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import traceback
+import unicodedata
 from dataclasses import asdict
 from pathlib import Path
 from typing import Callable
+
+
+def slugify(text: str, max_len: int = 40) -> str:
+    """Return a filesystem-safe slug from text (NFD, lowercase, hyphens, max_len)."""
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    text = text.strip("-")
+    return text[:max_len].rstrip("-")
 
 from . import probe as _probe
 from . import transcribe as _transcribe
@@ -79,6 +91,9 @@ def run(
     """Execute the full pipeline. Returns a result dict with metadata."""
     out_dir_p = Path(out_dir)
     out_dir_p.mkdir(parents=True, exist_ok=True)
+
+    titulo_txt = out_dir_p / "titulo.txt"
+    titulo_slug = slugify(titulo_txt.read_text(encoding="utf-8")) if titulo_txt.exists() else ""
 
     def emit(ev: dict) -> None:
         _emit_global(on_event, ev)
@@ -174,7 +189,8 @@ def run(
     emit({"type": "stage", "stage": "concat", "message": "Anexando cartão final"})
     final_paths: list[tuple[Path, str]] = []  # (path, drive_name)
     for i, c in enumerate(cuts):
-        final_path = out_dir_p / f"corte-{c.idx:02d}-{c.slug}.mp4"
+        prefix = f"{titulo_slug}-" if titulo_slug else ""
+        final_path = out_dir_p / f"{prefix}corte-{c.idx:02d}-{c.slug}.mp4"
         _concat.concat(str(content_paths[i]), str(outro_path), str(final_path))
         final_paths.append((final_path, final_path.name))
         emit({"type": "progress", "stage": "concat", "fraction": (i + 1) / len(cuts)})

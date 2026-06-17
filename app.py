@@ -72,7 +72,7 @@ def api_status() -> JSONResponse:
 
 
 @app.post("/upload")
-async def upload(video: UploadFile = File(...), subtitle: str = Form("true"), mode: str = Form("cuts")) -> JSONResponse:
+async def upload(video: UploadFile = File(...), subtitle: str = Form("true"), mode: str = Form("cuts"), titulo: str = Form("")) -> JSONResponse:
     with_subtitles = subtitle.lower() == "true"
     with state.lock:
         if state.status == "running":
@@ -83,6 +83,9 @@ async def upload(video: UploadFile = File(...), subtitle: str = Form("true"), mo
         job_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
         job_dir = OUTPUT_DIR / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
+        titulo_clean = titulo.strip()
+        if titulo_clean:
+            (job_dir / "titulo.txt").write_text(titulo_clean, encoding="utf-8")
         source_path = job_dir / "source.mp4"
 
         # Stream upload to disk with size guard
@@ -217,7 +220,12 @@ def start_booklet(job_id: str) -> JSONResponse:
             q.put(ev)
         try:
             from pipeline import booklet as _booklet
-            pdf_path = str(job_dir / "livreto.pdf")
+            titulo_txt = job_dir / "titulo.txt"
+            if titulo_txt.exists():
+                pdf_name = "livreto-" + pipeline_mod.slugify(titulo_txt.read_text(encoding="utf-8")) + ".pdf"
+            else:
+                pdf_name = "livreto.pdf"
+            pdf_path = str(job_dir / pdf_name)
             _booklet.generate_booklet(str(job_dir), str(ICON_PATH), pdf_path, on_event)
             drive_result = _booklet.upload_booklet_to_drive(pdf_path, on_event)
             q.put({

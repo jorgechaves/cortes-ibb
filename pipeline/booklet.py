@@ -237,11 +237,14 @@ def generate_booklet(
     text = transcript_path.read_text(encoding="utf-8")
     job_id = Path(job_dir).name
 
+    titulo_txt = Path(job_dir) / "titulo.txt"
+    titulo_saved = titulo_txt.read_text(encoding="utf-8").strip() if titulo_txt.exists() else ""
+
     on_event({"type": "stage", "stage": "booklet", "message": "Revisando e melhorando o texto"})
     on_event({"type": "progress", "stage": "booklet", "fraction": 0.05})
     corrected = edit_text(text, on_event)
 
-    title = _extract_title(corrected or text, job_id)
+    title = titulo_saved if titulo_saved else _extract_title(corrected or text, job_id)
     on_event({"type": "log", "stage": "booklet", "message": f"Título: {title}"})
     on_event({"type": "stage", "stage": "booklet", "message": "Montando PDF A5"})
     on_event({"type": "progress", "stage": "booklet", "fraction": 0.55})

@@ -376,7 +376,17 @@
       font-size: 20px; font-weight: 700;
       color: var(--text); margin-bottom: 10px;
     }
-    .subtitle-card p { font-size: 13px; color: var(--text-2); margin-bottom: 28px; }
+    .subtitle-card p { font-size: 13px; color: var(--text-2); margin-bottom: 16px; }
+    .titulo-input {
+      width: 100%; box-sizing: border-box;
+      padding: 10px 14px; margin-bottom: 20px;
+      background: var(--surface); border: 1.5px solid var(--border-hi);
+      border-radius: var(--r); color: var(--text);
+      font-family: inherit; font-size: 14px;
+      outline: none; transition: border-color .15s;
+    }
+    .titulo-input::placeholder { color: var(--text-3); }
+    .titulo-input:focus { border-color: var(--gold); }
     .subtitle-btns { display: flex; gap: 12px; justify-content: center; }
     .btn-subtitle {
       flex: 1; padding: 11px 16px;
@@ -477,6 +487,7 @@
   <div class="subtitle-card">
     <h2>Como processar este vídeo?</h2>
     <p>Gerar cortes para redes sociais — incluir legenda queimada?</p>
+    <input type="text" id="titulo-input" class="titulo-input" placeholder="Título do sermão (opcional)" maxlength="120">
     <div class="subtitle-btns">
       <button id="btn-with-subtitle" class="btn-subtitle btn-subtitle-yes">Com legenda</button>
       <button id="btn-no-subtitle" class="btn-subtitle btn-subtitle-no">Sem legenda</button>
@@ -593,6 +604,7 @@
     form.append('video', file);
     form.append('subtitle', withSubtitle ? 'true' : 'false');
     form.append('mode', mode);
+    form.append('titulo', document.getElementById('titulo-input').value.trim());
     fetch('/upload', { method: 'POST', body: form })
       .then(async r => {
         if (!r.ok) { const t = await r.text(); throw new Error(`HTTP ${r.status}: ${t}`); }
@@ -942,6 +954,7 @@
   function closeSubtitleModal() {
     subtitleOverlay.classList.remove('open');
     pendingFile = null;
+    document.getElementById('titulo-input').value = '';
   }
 
   document.getElementById('btn-with-subtitle').addEventListener('click', () => {
