@@ -7,11 +7,19 @@ Gera um livreto A5 em PDF a partir do transcript de um job, aplicando correção
 ## Requirements
 
 ### Requirement: Geração de livreto A5 em PDF a partir do transcript
-O sistema SHALL gerar um arquivo PDF no formato A5 (148 × 210 mm) a partir do arquivo `transcript.txt` de um job existente, seguindo o template visual de `modelo_livreto.pdf`. O conteúdo textual SHALL ter ortografia e concordância corrigidas em português brasileiro antes de ser incluído no PDF. O sistema NÃO DEVE resumir, omitir ou reorganizar o conteúdo do transcript.
+O sistema SHALL gerar um arquivo PDF no formato A5 (148 × 210 mm) a partir do arquivo `transcript.txt` de um job existente, seguindo o template visual de `modelo_livreto.pdf`. O conteúdo textual SHALL ter ortografia e concordância corrigidas em português brasileiro antes de ser incluído no PDF. O sistema NÃO DEVE resumir, omitir ou reorganizar o conteúdo do transcript. O nome do arquivo PDF gerado SHALL ser `livreto-{titulo_slug}.pdf` quando `titulo.txt` existir no `job_dir`; caso contrário, SHALL ser `livreto.pdf`.
 
-#### Scenario: Livreto gerado com sucesso seguindo o modelo
-- **WHEN** `POST /booklet/{job_id}` é chamado e `output/{job_id}/transcript.txt` existe
-- **THEN** o sistema gera `output/{job_id}/livreto.pdf` com capa azul-marinho, barras douradas, `icone.png` no topo-esquerdo da capa, páginas de conteúdo brancas com cabeçalho cinza + linha dourada, e contracapa azul-marinho com `icone.png` centralizado
+#### Scenario: Livreto gerado com título fornecido
+- **WHEN** `POST /booklet/{job_id}` é chamado e `output/{job_id}/titulo.txt` existe com conteúdo "A Graça de Deus"
+- **THEN** o sistema gera `output/{job_id}/livreto-a-graca-de-deus.pdf` com o título "A Graça de Deus" na capa e no cabeçalho das páginas de conteúdo
+
+#### Scenario: Livreto gerado sem título (fallback)
+- **WHEN** `POST /booklet/{job_id}` é chamado e `output/{job_id}/titulo.txt` não existe
+- **THEN** o sistema gera `output/{job_id}/livreto.pdf` com o título extraído do transcript via `_extract_title()`, preservando o comportamento atual
+
+#### Scenario: Livreto enviado ao Drive com nome correto
+- **WHEN** o livreto é gerado com título "A Graça de Deus"
+- **THEN** o arquivo enviado ao Drive/livros/ tem nome `livreto-a-graca-de-deus.pdf`
 
 #### Scenario: Transcript não encontrado
 - **WHEN** `POST /booklet/{job_id}` é chamado e `output/{job_id}/transcript.txt` não existe
@@ -22,7 +30,11 @@ O sistema SHALL gerar um arquivo PDF no formato A5 (148 × 210 mm) a partir do a
 - **THEN** a rota retorna HTTP 404
 
 ### Requirement: Capa seguindo o template modelo_livreto.pdf
-O PDF gerado SHALL conter uma página de capa com: fundo azul-marinho (`#16243a`), barra dourada horizontal no topo e na base da página (~28pt de altura), barra vertical dourada à esquerda (~18pt de largura, entre as barras horizontais), `icone.png` no canto superior esquerdo (~30×30pt, abaixo da barra superior), título do sermão em fonte sem-serifa bold branca grande (~36pt), linha dourada horizontal após o título, e o texto "Pr. Carlos Chaves" no rodapé esquerdo em fonte sem-serifa branca.
+O PDF gerado SHALL conter uma página de capa com: fundo azul-marinho (`#16243a`), barra dourada horizontal no topo e na base da página (~28pt de altura), barra vertical dourada à esquerda (~18pt de largura, entre as barras horizontais), `icone.png` no canto superior esquerdo (~30×30pt, abaixo da barra superior), título do sermão em fonte sem-serifa bold branca grande (~36pt), linha dourada horizontal após o título, e o texto "Pr. Carlos Chaves" no rodapé esquerdo em fonte sem-serifa branca. O título SHALL ser lido de `titulo.txt` quando disponível, e de `_extract_title()` como fallback.
+
+#### Scenario: Capa com título de titulo.txt
+- **WHEN** `titulo.txt` existe com conteúdo "Fé que Move Montanhas"
+- **THEN** a capa exibe "Fé que Move Montanhas" como título grande em branco, sem depender de extração do transcript
 
 #### Scenario: Capa com todos os elementos visuais
 - **WHEN** o livreto é gerado
@@ -40,7 +52,7 @@ A última página do PDF SHALL ser uma contracapa com: fundo azul-marinho (`#162
 - **THEN** a última página exibe fundo `#16243a`, barras douradas topo e base, barra vertical dourada esquerda, e `icone.png` centralizado horizontalmente e verticalmente na página
 
 ### Requirement: Páginas de conteúdo seguindo o template modelo_livreto.pdf
-As páginas de conteúdo SHALL ter: fundo branco, cabeçalho com texto `{título} I {referência}` em cinza (~8.5pt Helvetica) seguido de linha dourada horizontal imediatamente abaixo, corpo de texto em Times-Roman 11pt preto justificado com leading 14.3pt e espaçamento entre parágrafos, número de página centralizado no rodapé em cinza.
+As páginas de conteúdo SHALL ter: fundo branco, cabeçalho com o título do sermão em cinza (~8.5pt Helvetica) seguido de linha dourada horizontal imediatamente abaixo, corpo de texto em Times-Roman 11pt preto justificado com leading 14.3pt e espaçamento entre parágrafos, número de página centralizado no rodapé em cinza. O título usado no cabeçalho SHALL ser o mesmo da capa (lido de `titulo.txt` ou extraído por fallback).
 
 #### Scenario: Cabeçalho e corpo corretos em cada página
 - **WHEN** o livreto é gerado e tem múltiplas páginas de conteúdo
@@ -118,4 +130,4 @@ A interface web SHALL exibir um botão "Gerar Livreto" na seção de resultados 
 
 #### Scenario: Conclusão da geração
 - **WHEN** a geração do livreto termina com sucesso
-- **THEN** a interface exibe um link para download do `livreto.pdf` e um link para o Drive (se disponível)
+- **THEN** a interface exibe um link para download do PDF (com nome correto incluindo o título) e um link para o Drive (se disponível)
